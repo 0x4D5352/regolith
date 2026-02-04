@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/0x4d5352/regolith/internal/flavor/posix_ere"
 	"github.com/0x4d5352/regolith/internal/parser"
 )
 
@@ -254,6 +255,110 @@ func TestGoldenFiles(t *testing.T) {
 				t.Errorf("SVG output differs from golden file %s", goldenPath)
 				t.Logf("Run with GOLDEN_UPDATE=1 to update golden files")
 			}
+		})
+	}
+}
+
+// TestPOSIXEREGoldenFiles tests POSIX ERE patterns against golden file outputs
+func TestPOSIXEREGoldenFiles(t *testing.T) {
+	goldenDir := "testdata/golden/posix-ere"
+
+	// Create golden directory if it doesn't exist
+	if err := os.MkdirAll(goldenDir, 0755); err != nil {
+		t.Fatalf("failed to create golden directory: %v", err)
+	}
+
+	ere := &posix_ere.POSIXERE{}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		{"literal", "abc"},
+		{"alternation", "a|b|c"},
+		{"charset", "[a-z]"},
+		{"posix-alpha", "[[:alpha:]]"},
+		{"posix-digit", "[[:digit:]]"},
+		{"posix-alnum", "[[:alnum:]]"},
+		{"posix-space", "[[:space:]]"},
+		{"posix-multiple", "[[:alpha:][:digit:]]"},
+		{"posix-negated", "[^[:digit:]]"},
+		{"quantifier-star", "a*"},
+		{"quantifier-plus", "a+"},
+		{"quantifier-range", "a{2,5}"},
+		{"group", "(abc)"},
+		{"anchor", "^start$"},
+		{"complex-email", "[[:alnum:]]+@[[:alnum:]]+"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := ere.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			goldenPath := filepath.Join(goldenDir, tc.name+".svg")
+
+			// If GOLDEN_UPDATE env var is set, update golden files
+			if os.Getenv("GOLDEN_UPDATE") != "" {
+				if err := os.WriteFile(goldenPath, []byte(svg), 0644); err != nil {
+					t.Fatalf("failed to write golden file: %v", err)
+				}
+				t.Logf("Updated golden file: %s", goldenPath)
+				return
+			}
+
+			// Check if golden file exists
+			golden, err := os.ReadFile(goldenPath)
+			if os.IsNotExist(err) {
+				// Golden file doesn't exist, create it
+				if err := os.WriteFile(goldenPath, []byte(svg), 0644); err != nil {
+					t.Fatalf("failed to create golden file: %v", err)
+				}
+				t.Logf("Created golden file: %s", goldenPath)
+				return
+			} else if err != nil {
+				t.Fatalf("failed to read golden file: %v", err)
+			}
+
+			// Compare with golden file
+			if svg != string(golden) {
+				t.Errorf("SVG output differs from golden file %s", goldenPath)
+				t.Logf("Run with GOLDEN_UPDATE=1 to update golden files")
+			}
+		})
+	}
+}
+
+// TestPOSIXEREIntegration tests complete POSIX ERE rendering pipeline
+func TestPOSIXEREIntegration(t *testing.T) {
+	ere := &posix_ere.POSIXERE{}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		{"identifier", "[[:alpha:]_][[:alnum:]_]*"},
+		{"phone", "[0-9]{3}-[0-9]{4}"},
+		{"date", "[0-9]{4}-[0-9]{2}-[0-9]{2}"},
+		{"hex", "[[:xdigit:]]+"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := ere.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			validateSVG(t, svg)
 		})
 	}
 }

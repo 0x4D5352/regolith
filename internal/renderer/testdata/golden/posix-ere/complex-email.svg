@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="396.8" height="93" viewBox="0 0 396.8 93"><style>
+		.literal rect { fill: #ff6b6b; }
+		.escape rect { fill: #bada55; }
+		.charset rect { fill: #cbcbba; }
+		.anchor rect { fill: #6b6659; }
+		.any-character rect { fill: #dae9e5; }
+		.flags rect { fill: #c8e0f9; }
+		text { font-family: monospace; font-size: 14px; fill: #000; }
+		.anchor text { fill: #fff; }
+		.quote { fill: #000; }
+		.subexp-label, .charset-label, .flags-label { font-size: 12px; font-style: italic; }
+		.repeat-label { fill: #666; font-size: 12px; }
+	</style><line x1="5" y1="36.5" x2="10" y2="36.5" stroke="#000" stroke-width="2"/><line x1="386.8" y1="36.5" x2="391.8" y2="36.5" stroke="#000" stroke-width="2"/><g transform="translate(10,10)"><g class="match"><path d="M 160.8 26.5 L 170.8 26.5 M 206 26.5 L 216 26.5" fill="none" stroke="#000" stroke-width="2"/><g class="repeat"><path d="M 160.8 26.5 Q 160.8 63 150.8 63 H 10 Q 0 63 0 26.5" fill="none" stroke="#000" stroke-width="2" class="loop-path"/><path d="M 85.4 58 L 80.4 63 L 85.4 68" fill="none" stroke="#000" stroke-width="2"/><g transform="translate(10,0)"><g class="charset"><rect x="0" y="0" width="140.8" height="53" rx="3" ry="3"/><text x="10" y="14" font-family="monospace" font-size="12" class="charset-label">One of:</text><text x="70.4" y="38" font-family="monospace" font-size="14" text-anchor="middle">alphanumeric</text></g></g><line x1="0" y1="26.5" x2="10" y2="26.5" stroke="#000" stroke-width="2"/><line x1="150.8" y1="26.5" x2="160.8" y2="26.5" stroke="#000" stroke-width="2"/></g><g transform="translate(170.8,14.5)"><g class="literal"><rect x="0" y="0" width="35.2" height="24" rx="3" ry="3"/><text x="17.6" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>@</tspan><tspan class="quote">&#34;</tspan></text></g></g><g transform="translate(216,0)"><g class="repeat"><path d="M 160.8 26.5 Q 160.8 63 150.8 63 H 10 Q 0 63 0 26.5" fill="none" stroke="#000" stroke-width="2" class="loop-path"/><path d="M 85.4 58 L 80.4 63 L 85.4 68" fill="none" stroke="#000" stroke-width="2"/><g transform="translate(10,0)"><g class="charset"><rect x="0" y="0" width="140.8" height="53" rx="3" ry="3"/><text x="10" y="14" font-family="monospace" font-size="12" class="charset-label">One of:</text><text x="70.4" y="38" font-family="monospace" font-size="14" text-anchor="middle">alphanumeric</text></g></g><line x1="0" y1="26.5" x2="10" y2="26.5" stroke="#000" stroke-width="2"/><line x1="150.8" y1="26.5" x2="160.8" y2="26.5" stroke="#000" stroke-width="2"/></g></g></g></g></svg>

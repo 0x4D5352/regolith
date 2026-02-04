@@ -1,0 +1,260 @@
+{
+package posix_ere
+
+import (
+    "fmt"
+
+    "github.com/0x4d5352/regolith/internal/ast"
+)
+
+// parserState returns the parser state from the global state map
+func parserState(c *current) *ast.ParserState {
+    return c.globalStore["state"].(*ast.ParserState)
+}
+}
+
+// Entry point - POSIX ERE has no delimiters or flags, just a plain pattern
+Root <- regexp:Regexp EOF {
+    return regexp.(*ast.Regexp), nil
+}
+
+// Regexp is alternation of matches separated by |
+Regexp <- first:Match rest:( '|' Match )* {
+    matches := []*ast.Match{first.(*ast.Match)}
+    if rest != nil {
+        for _, r := range rest.([]any) {
+            pair := r.([]any)
+            matches = append(matches, pair[1].(*ast.Match))
+        }
+    }
+    return &ast.Regexp{Matches: matches}, nil
+}
+
+// Match is a sequence of fragments
+Match <- frags:MatchFragment* {
+    fragments := []*ast.MatchFragment{}
+    if frags != nil {
+        for _, f := range frags.([]any) {
+            fragments = append(fragments, f.(*ast.MatchFragment))
+        }
+    }
+    return &ast.Match{Fragments: fragments}, nil
+}
+
+// MatchFragment is content with optional repeat
+MatchFragment <- content:Content repeat:Repeat? {
+    mf := &ast.MatchFragment{Content: content.(ast.Node)}
+    if repeat != nil {
+        mf.Repeat = repeat.(*ast.Repeat)
+    }
+    return mf, nil
+}
+
+// Content is what can appear in a match fragment
+Content <- Anchor / Subexp / Charset / Terminal
+
+// Anchor: ^ or $ only in POSIX ERE
+Anchor <- ( '^' / '$' ) {
+    anchorType := "start"
+    if string(c.text) == "$" {
+        anchorType = "end"
+    }
+    return &ast.Anchor{AnchorType: anchorType}, nil
+}
+
+// Subexp: only capturing groups () in POSIX ERE
+// No (?:), (?=), (?!), (?<=), (?<!) or (?<name>)
+Subexp <- '(' regexp:Regexp ')' {
+    s := &ast.Subexp{
+        GroupType: "capture",
+        Number:    parserState(c).NextGroupNumber(),
+        Regexp:    regexp.(*ast.Regexp),
+    }
+    return s, nil
+}
+
+// Charset: [...] or [^...]
+// POSIX ERE supports POSIX character classes like [[:alpha:]]
+Charset <- '[' inverted:'^'? items:CharsetItem* ']' {
+    charset := &ast.Charset{
+        Inverted: inverted != nil,
+        Items:    []ast.CharsetItem{},
+    }
+    if items != nil {
+        for _, item := range items.([]any) {
+            charset.Items = append(charset.Items, item.(ast.CharsetItem))
+        }
+    }
+    return charset, nil
+}
+
+// CharsetItem: POSIX class, range, or single character
+// Order matters: try POSIX class first, then range, then single char
+CharsetItem <- POSIXClass / CharsetRange / CharsetEscape / CharsetLiteral
+
+// POSIXClass: [:classname:] inside a bracket expression
+POSIXClass <- "[:" name:POSIXClassName ":]" {
+    return &ast.POSIXClass{Name: name.(string), Negated: false}, nil
+} / "[:^" name:POSIXClassName ":]" {
+    // Some implementations support negated POSIX classes [:^alpha:]
+    return &ast.POSIXClass{Name: name.(string), Negated: true}, nil
+}
+
+// POSIXClassName: valid POSIX class names
+POSIXClassName <- "alnum" { return "alnum", nil }
+              / "alpha" { return "alpha", nil }
+              / "blank" { return "blank", nil }
+              / "cntrl" { return "cntrl", nil }
+              / "digit" { return "digit", nil }
+              / "graph" { return "graph", nil }
+              / "lower" { return "lower", nil }
+              / "print" { return "print", nil }
+              / "punct" { return "punct", nil }
+              / "space" { return "space", nil }
+              / "upper" { return "upper", nil }
+              / "xdigit" { return "xdigit", nil }
+
+// CharsetRange: a-z
+CharsetRange <- first:CharsetRangeBound '-' last:CharsetRangeBound {
+    return &ast.CharsetRange{
+        First: first.(string),
+        Last:  last.(string),
+    }, nil
+}
+
+// CharsetRangeBound: what can be a range endpoint
+CharsetRangeBound <- CharsetRangeEscape / CharsetRangeLiteral
+
+// CharsetRangeEscape: escaped char that can be a range bound
+// In POSIX ERE, only metacharacter escapes are defined
+// Matches escaped metacharacters: . [ ] \ ^ $ * + ? { } ( ) |
+CharsetRangeEscape <- '\\' char:MetaChar {
+    return string(char.([]byte)), nil
+}
+
+// MetaChar: characters that are metacharacters in POSIX ERE
+MetaChar <- '.' / '[' / ']' / '\\' / '^' / '$' / '*' / '+' / '?' / '{' / '}' / '(' / ')' / '|'
+
+// CharsetRangeLiteral: literal char in a range context (not - or ] or \)
+CharsetRangeLiteral <- [^-\]\\] {
+    return string(c.text), nil
+}
+
+// CharsetEscape: escape sequence in charset
+// POSIX ERE only defines escaping of metacharacters
+CharsetEscape <- '\\' char:MetaChar {
+    return &ast.CharsetLiteral{Text: string(char.([]byte))}, nil
+}
+
+// CharsetLiteral: literal character in charset
+// Special handling for ] at start and - at start/end
+CharsetLiteral <- [^\]\\] {
+    return &ast.CharsetLiteral{Text: string(c.text)}, nil
+} / '\\' char:. {
+    // Unknown escape in charset - check if it's a non-POSIX escape
+    ch := string(char.([]byte))
+    switch ch {
+    case "d", "D", "w", "W", "s", "S":
+        return nil, fmt.Errorf("\\%s is not supported in POSIX ERE; use POSIX character classes instead (e.g., [[:digit:]] for \\d, [[:space:]] for \\s)", ch)
+    default:
+        // Treat as literal (undefined behavior per spec, but we'll be lenient in charsets)
+        return &ast.CharsetLiteral{Text: ch}, nil
+    }
+}
+
+// Terminal: what can appear outside groups/charsets
+Terminal <- AnyChar / Escape / Literal
+
+// AnyChar: the . metacharacter
+AnyChar <- '.' {
+    return &ast.AnyCharacter{}, nil
+}
+
+// Escape: escape sequences in POSIX ERE
+// Only metacharacter escapes are defined; others produce parse errors
+Escape <- '\\' char:MetaChar {
+    // Escaped metacharacter becomes literal
+    return &ast.Literal{Text: string(char.([]byte))}, nil
+} / '\\' char:[dDwWsS] {
+    // JavaScript-style character class escapes - not supported
+    ch := string(char.([]byte))
+    var suggestion string
+    switch ch {
+    case "d":
+        suggestion = "[[:digit:]]"
+    case "D":
+        suggestion = "[^[:digit:]]"
+    case "w":
+        suggestion = "[[:alnum:]_]"
+    case "W":
+        suggestion = "[^[:alnum:]_]"
+    case "s":
+        suggestion = "[[:space:]]"
+    case "S":
+        suggestion = "[^[:space:]]"
+    }
+    return nil, fmt.Errorf("\\%s is not supported in POSIX ERE; use %s instead", ch, suggestion)
+} / '\\' char:[bB] {
+    // Word boundary escapes - not supported
+    ch := string(char.([]byte))
+    if ch == "b" {
+        return nil, fmt.Errorf("\\b (word boundary) is not supported in POSIX ERE")
+    }
+    return nil, fmt.Errorf("\\B (non-word boundary) is not supported in POSIX ERE")
+} / '\\' char:[0-9] {
+    // Back-references - not supported in ERE (they're a BRE feature)
+    return nil, fmt.Errorf("back-references (\\%s) are not supported in POSIX ERE; they are a POSIX BRE feature", string(char.([]byte)))
+} / '\\' char:[nrt] {
+    // Common escape sequences - provide helpful error
+    ch := string(char.([]byte))
+    var desc string
+    switch ch {
+    case "n":
+        desc = "newline"
+    case "r":
+        desc = "carriage return"
+    case "t":
+        desc = "tab"
+    }
+    return nil, fmt.Errorf("\\%s (%s) is not a standard POSIX ERE escape sequence; behavior is implementation-defined", ch, desc)
+}
+
+// Literal: regular characters (not metacharacters)
+Literal <- LiteralChars+ {
+    return &ast.Literal{Text: string(c.text)}, nil
+} / '\\' char:. {
+    // Unknown escape - undefined behavior, we'll produce an error
+    ch := string(char.([]byte))
+    return nil, fmt.Errorf("\\%s is not a recognized escape sequence in POSIX ERE", ch)
+}
+
+// LiteralChars: characters that don't need escaping in POSIX ERE
+// Uses whitelist approach - metacharacters are: . [ ] \ ( ) | * + ? { } ^ $
+LiteralChars <- [a-zA-Z0-9_ !@#%&:;"'<>,`~=/-]
+
+// Repeat: quantifiers
+Repeat <- spec:RepeatSpec {
+    return spec.(*ast.Repeat), nil
+}
+
+// RepeatSpec: the quantifier itself
+// POSIX ERE quantifiers are always greedy (no non-greedy modifier)
+RepeatSpec <- '*' {
+    return &ast.Repeat{Min: 0, Max: -1, Greedy: true}, nil
+} / '+' {
+    return &ast.Repeat{Min: 1, Max: -1, Greedy: true}, nil
+} / '?' {
+    return &ast.Repeat{Min: 0, Max: 1, Greedy: true}, nil
+} / '{' min:[0-9]+ ',' max:[0-9]+ '}' {
+    minVal := parseInt(min)
+    maxVal := parseInt(max)
+    return &ast.Repeat{Min: minVal, Max: maxVal, Greedy: true}, nil
+} / '{' min:[0-9]+ ',' '}' {
+    minVal := parseInt(min)
+    return &ast.Repeat{Min: minVal, Max: -1, Greedy: true}, nil
+} / '{' exact:[0-9]+ '}' {
+    val := parseInt(exact)
+    return &ast.Repeat{Min: val, Max: val, Greedy: true}, nil
+}
+
+EOF <- !.

@@ -760,6 +760,8 @@ func (r *Renderer) renderCharset(charset *parser.Charset) RenderedNode {
 			itemTexts = append(itemTexts, fmt.Sprintf(`"%s" - "%s"`, it.First, it.Last))
 		case *parser.Escape:
 			itemTexts = append(itemTexts, it.Value)
+		case *parser.POSIXClass:
+			itemTexts = append(itemTexts, r.getPOSIXClassLabel(it))
 		}
 	}
 
@@ -769,6 +771,34 @@ func (r *Renderer) renderCharset(charset *parser.Charset) RenderedNode {
 	}
 
 	return r.renderLabeledBox(label, itemTexts, "charset")
+}
+
+// getPOSIXClassLabel returns a human-readable label for a POSIX character class
+func (r *Renderer) getPOSIXClassLabel(pc *parser.POSIXClass) string {
+	labels := map[string]string{
+		"alnum":  "alphanumeric",
+		"alpha":  "alphabetic",
+		"blank":  "blank (space/tab)",
+		"cntrl":  "control character",
+		"digit":  "digit",
+		"graph":  "visible character",
+		"lower":  "lowercase",
+		"print":  "printable",
+		"punct":  "punctuation",
+		"space":  "whitespace",
+		"upper":  "uppercase",
+		"xdigit": "hex digit",
+	}
+
+	label, ok := labels[pc.Name]
+	if !ok {
+		label = pc.Name
+	}
+
+	if pc.Negated {
+		return "NOT " + label
+	}
+	return label
 }
 
 // renderSubexp renders a subexpression group

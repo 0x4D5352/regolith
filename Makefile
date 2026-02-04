@@ -26,12 +26,17 @@ coverage:
 
 # Generate all parsers from grammars
 .PHONY: generate
-generate: generate-javascript
+generate: generate-javascript generate-posix-ere
 
 # Generate JavaScript parser
 .PHONY: generate-javascript
 generate-javascript: $(PIGEON)
 	$(PIGEON) -o internal/flavor/javascript/parser.go internal/flavor/javascript/grammar.peg
+
+# Generate POSIX ERE parser
+.PHONY: generate-posix-ere
+generate-posix-ere: $(PIGEON)
+	$(PIGEON) -o internal/flavor/posix_ere/parser.go internal/flavor/posix_ere/grammar.peg
 
 # Install pigeon if needed
 $(PIGEON):
@@ -73,14 +78,15 @@ fmt:
 # Show help
 help:
 	@echo "Available targets:"
-	@echo "  build              - Build for current platform"
-	@echo "  install            - Install to GOPATH/bin"
-	@echo "  test               - Run tests"
-	@echo "  coverage           - Run tests with coverage report"
-	@echo "  generate           - Regenerate all parsers from grammars"
+	@echo "  build               - Build for current platform"
+	@echo "  install             - Install to GOPATH/bin"
+	@echo "  test                - Run tests"
+	@echo "  coverage            - Run tests with coverage report"
+	@echo "  generate            - Regenerate all parsers from grammars"
 	@echo "  generate-javascript - Regenerate JavaScript parser"
-	@echo "  clean              - Remove build artifacts"
-	@echo "  release            - Cross-compile for all platforms"
-	@echo "  golden             - Update golden test files"
-	@echo "  lint               - Run linter"
-	@echo "  fmt                - Format code"
+	@echo "  generate-posix-ere  - Regenerate POSIX ERE parser"
+	@echo "  clean               - Remove build artifacts"
+	@echo "  release             - Cross-compile for all platforms"
+	@echo "  golden              - Update golden test files"
+	@echo "  lint                - Run linter"
+	@echo "  fmt                 - Format code"
