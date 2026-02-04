@@ -1,0 +1,269 @@
+{
+package posix_bre
+
+import (
+    "fmt"
+
+    "github.com/0x4d5352/regolith/internal/ast"
+)
+
+// parserState returns the parser state from the global state map
+func parserState(c *current) *ast.ParserState {
+    return c.globalStore["state"].(*ast.ParserState)
+}
+}
+
+// Entry point - POSIX BRE has no delimiters or flags, just a plain pattern
+// Unlike ERE, BRE has NO alternation operator
+Root <- regexp:Regexp EOF {
+    return regexp.(*ast.Regexp), nil
+}
+
+// Regexp in BRE is just a single match (no alternation)
+// Alternation is NOT part of POSIX BRE (it's a GNU extension)
+Regexp <- match:Match {
+    return &ast.Regexp{Matches: []*ast.Match{match.(*ast.Match)}}, nil
+}
+
+// Match is a sequence of fragments
+Match <- frags:MatchFragment* {
+    fragments := []*ast.MatchFragment{}
+    if frags != nil {
+        for _, f := range frags.([]any) {
+            fragments = append(fragments, f.(*ast.MatchFragment))
+        }
+    }
+    return &ast.Match{Fragments: fragments}, nil
+}
+
+// MatchFragment is content with optional repeat
+// Use negative lookahead to stop at \) which closes a group
+MatchFragment <- !('\\' ')') content:Content repeat:Repeat? {
+    mf := &ast.MatchFragment{Content: content.(ast.Node)}
+    if repeat != nil {
+        mf.Repeat = repeat.(*ast.Repeat)
+    }
+    return mf, nil
+}
+
+// Content is what can appear in a match fragment
+Content <- Anchor / Subexp / Charset / BackReference / Terminal
+
+// Anchor: ^ or $ only in POSIX BRE
+Anchor <- ( '^' / '$' ) {
+    anchorType := "start"
+    if string(c.text) == "$" {
+        anchorType = "end"
+    }
+    return &ast.Anchor{AnchorType: anchorType}, nil
+}
+
+// Subexp: \( ... \) in POSIX BRE (inverted escaping!)
+// Unlike ERE where () is used, BRE requires \( \)
+Subexp <- '\\' '(' regexp:Regexp '\\' ')' {
+    s := &ast.Subexp{
+        GroupType: "capture",
+        Number:    parserState(c).NextGroupNumber(),
+        Regexp:    regexp.(*ast.Regexp),
+    }
+    return s, nil
+}
+
+// BackReference: \1 through \9 (BRE supports back-references, unlike ERE)
+BackReference <- '\\' num:[1-9] {
+    n := int(num.([]byte)[0] - '0')
+    return &ast.BackReference{Number: n}, nil
+}
+
+// Charset: [...] or [^...]
+// POSIX BRE supports POSIX character classes like [[:alpha:]]
+Charset <- '[' inverted:'^'? items:CharsetItem* ']' {
+    charset := &ast.Charset{
+        Inverted: inverted != nil,
+        Items:    []ast.CharsetItem{},
+    }
+    if items != nil {
+        for _, item := range items.([]any) {
+            charset.Items = append(charset.Items, item.(ast.CharsetItem))
+        }
+    }
+    return charset, nil
+}
+
+// CharsetItem: POSIX class, range, or single character
+// Order matters: try POSIX class first, then range, then single char
+CharsetItem <- POSIXClass / CharsetRange / CharsetEscape / CharsetLiteral
+
+// POSIXClass: [:classname:] inside a bracket expression
+POSIXClass <- "[:" name:POSIXClassName ":]" {
+    return &ast.POSIXClass{Name: name.(string), Negated: false}, nil
+} / "[:^" name:POSIXClassName ":]" {
+    // Some implementations support negated POSIX classes [:^alpha:]
+    return &ast.POSIXClass{Name: name.(string), Negated: true}, nil
+}
+
+// POSIXClassName: valid POSIX class names
+POSIXClassName <- "alnum" { return "alnum", nil }
+              / "alpha" { return "alpha", nil }
+              / "blank" { return "blank", nil }
+              / "cntrl" { return "cntrl", nil }
+              / "digit" { return "digit", nil }
+              / "graph" { return "graph", nil }
+              / "lower" { return "lower", nil }
+              / "print" { return "print", nil }
+              / "punct" { return "punct", nil }
+              / "space" { return "space", nil }
+              / "upper" { return "upper", nil }
+              / "xdigit" { return "xdigit", nil }
+
+// CharsetRange: a-z
+CharsetRange <- first:CharsetRangeBound '-' last:CharsetRangeBound {
+    return &ast.CharsetRange{
+        First: first.(string),
+        Last:  last.(string),
+    }, nil
+}
+
+// CharsetRangeBound: what can be a range endpoint
+CharsetRangeBound <- CharsetRangeEscape / CharsetRangeLiteral
+
+// CharsetRangeEscape: escaped char that can be a range bound
+// In POSIX BRE, only a few escapes are meaningful
+CharsetRangeEscape <- '\\' char:SpecialChar {
+    return string(char.([]byte)), nil
+}
+
+// SpecialChar: characters that can be escaped to become literal
+// In BRE: . * [ ] \ ^ $
+SpecialChar <- '.' / '*' / '[' / ']' / '\\' / '^' / '$'
+
+// CharsetRangeLiteral: literal char in a range context (not - or ] or \)
+CharsetRangeLiteral <- [^-\]\\] {
+    return string(c.text), nil
+}
+
+// CharsetEscape: escape sequence in charset
+CharsetEscape <- '\\' char:SpecialChar {
+    return &ast.CharsetLiteral{Text: string(char.([]byte))}, nil
+}
+
+// CharsetLiteral: literal character in charset
+CharsetLiteral <- [^\]\\] {
+    return &ast.CharsetLiteral{Text: string(c.text)}, nil
+} / '\\' char:. {
+    // Unknown escape in charset - check if it's a non-POSIX escape
+    ch := string(char.([]byte))
+    switch ch {
+    case "d", "D", "w", "W", "s", "S":
+        return nil, fmt.Errorf("\\%s is not supported in POSIX BRE; use POSIX character classes instead (e.g., [[:digit:]] for \\d)", ch)
+    default:
+        // Treat as literal (undefined behavior per spec, but be lenient in charsets)
+        return &ast.CharsetLiteral{Text: ch}, nil
+    }
+}
+
+// Terminal: what can appear outside groups/charsets
+Terminal <- AnyChar / Escape / Literal
+
+// AnyChar: the . metacharacter (special without backslash in BRE)
+AnyChar <- '.' {
+    return &ast.AnyCharacter{}, nil
+}
+
+// Escape: escape sequences in POSIX BRE
+// Unlike ERE, BRE uses backslash to ACTIVATE special meaning for ( ) { }
+// But for . * [ \ ^ $ it's used to suppress (make literal)
+Escape <- '\\' char:SpecialChar {
+    // Escaped special character becomes literal
+    return &ast.Literal{Text: string(char.([]byte))}, nil
+} / '\\' char:[dDwWsS] {
+    // JavaScript-style character class escapes - not supported
+    ch := string(char.([]byte))
+    var suggestion string
+    switch ch {
+    case "d":
+        suggestion = "[[:digit:]]"
+    case "D":
+        suggestion = "[^[:digit:]]"
+    case "w":
+        suggestion = "[[:alnum:]_]"
+    case "W":
+        suggestion = "[^[:alnum:]_]"
+    case "s":
+        suggestion = "[[:space:]]"
+    case "S":
+        suggestion = "[^[:space:]]"
+    }
+    return nil, fmt.Errorf("\\%s is not supported in POSIX BRE; use %s instead", ch, suggestion)
+} / '\\' char:[bB] {
+    // Word boundary escapes - not supported in POSIX BRE
+    ch := string(char.([]byte))
+    if ch == "b" {
+        return nil, fmt.Errorf("\\b (word boundary) is not supported in POSIX BRE; consider using --flavor gnugrep")
+    }
+    return nil, fmt.Errorf("\\B (non-word boundary) is not supported in POSIX BRE; consider using --flavor gnugrep")
+} / '\\' char:[nrt] {
+    // Common escape sequences - provide helpful error
+    ch := string(char.([]byte))
+    var desc string
+    switch ch {
+    case "n":
+        desc = "newline"
+    case "r":
+        desc = "carriage return"
+    case "t":
+        desc = "tab"
+    }
+    return nil, fmt.Errorf("\\%s (%s) is not a standard POSIX BRE escape sequence; behavior is implementation-defined", ch, desc)
+} / '\\' '+' {
+    // \+ is a GNU extension, not POSIX BRE
+    return nil, fmt.Errorf("\\+ (one-or-more) is a GNU extension, not part of POSIX BRE; use \\{1,\\} instead or --flavor gnugrep")
+} / '\\' '?' {
+    // \? is a GNU extension, not POSIX BRE
+    return nil, fmt.Errorf("\\? (zero-or-one) is a GNU extension, not part of POSIX BRE; use \\{0,1\\} instead or --flavor gnugrep")
+} / '\\' '|' {
+    // \| is a GNU extension, not POSIX BRE
+    return nil, fmt.Errorf("\\| (alternation) is a GNU extension, not part of POSIX BRE; consider using --flavor gnugrep or --flavor posix-ere")
+} / '\\' ')' {
+    // \) outside of a group is an error
+    return nil, fmt.Errorf("\\) without matching \\( - unbalanced group")
+}
+
+// Literal: regular characters (not metacharacters)
+// In BRE, ( ) { } + ? | are LITERAL (not special) without backslash
+Literal <- LiteralChars+ {
+    return &ast.Literal{Text: string(c.text)}, nil
+} / '\\' char:. {
+    // Unknown escape - undefined behavior, produce an error
+    ch := string(char.([]byte))
+    return nil, fmt.Errorf("\\%s is not a recognized escape sequence in POSIX BRE", ch)
+}
+
+// LiteralChars: characters that don't need escaping in POSIX BRE
+// In BRE, metacharacters are: . [ \ ^ $ *
+// Everything else (including ( ) { } + ? |) is literal!
+LiteralChars <- [a-zA-Z0-9_ !@#%&:;"'<>,`~=/-] / [+?|(){}]
+
+// Repeat: quantifiers
+// In BRE: * (unescaped) and \{n,m\} (escaped) are the only quantifiers
+Repeat <- spec:RepeatSpec {
+    return spec.(*ast.Repeat), nil
+}
+
+// RepeatSpec: the quantifier itself
+// POSIX BRE quantifiers are always greedy (no non-greedy modifier)
+RepeatSpec <- '*' {
+    return &ast.Repeat{Min: 0, Max: -1, Greedy: true}, nil
+} / '\\' '{' min:[0-9]+ ',' max:[0-9]+ '\\' '}' {
+    minVal := parseInt(min)
+    maxVal := parseInt(max)
+    return &ast.Repeat{Min: minVal, Max: maxVal, Greedy: true}, nil
+} / '\\' '{' min:[0-9]+ ',' '\\' '}' {
+    minVal := parseInt(min)
+    return &ast.Repeat{Min: minVal, Max: -1, Greedy: true}, nil
+} / '\\' '{' exact:[0-9]+ '\\' '}' {
+    val := parseInt(exact)
+    return &ast.Repeat{Min: val, Max: val, Greedy: true}, nil
+}
+
+EOF <- !.

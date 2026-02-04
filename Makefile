@@ -26,7 +26,7 @@ coverage:
 
 # Generate all parsers from grammars
 .PHONY: generate
-generate: generate-javascript generate-posix-ere
+generate: generate-javascript generate-posix-ere generate-posix-bre
 
 # Generate JavaScript parser
 .PHONY: generate-javascript
@@ -37,6 +37,11 @@ generate-javascript: $(PIGEON)
 .PHONY: generate-posix-ere
 generate-posix-ere: $(PIGEON)
 	$(PIGEON) -o internal/flavor/posix_ere/parser.go internal/flavor/posix_ere/grammar.peg
+
+# Generate POSIX BRE parser
+.PHONY: generate-posix-bre
+generate-posix-bre: $(PIGEON)
+	$(PIGEON) -o internal/flavor/posix_bre/parser.go internal/flavor/posix_bre/grammar.peg
 
 # Install pigeon if needed
 $(PIGEON):
@@ -85,6 +90,7 @@ help:
 	@echo "  generate            - Regenerate all parsers from grammars"
 	@echo "  generate-javascript - Regenerate JavaScript parser"
 	@echo "  generate-posix-ere  - Regenerate POSIX ERE parser"
+	@echo "  generate-posix-bre  - Regenerate POSIX BRE parser"
 	@echo "  clean               - Remove build artifacts"
 	@echo "  release             - Cross-compile for all platforms"
 	@echo "  golden              - Update golden test files"

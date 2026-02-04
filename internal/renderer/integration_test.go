@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/0x4d5352/regolith/internal/flavor/posix_bre"
 	"github.com/0x4d5352/regolith/internal/flavor/posix_ere"
 	"github.com/0x4d5352/regolith/internal/parser"
 )
@@ -351,6 +352,134 @@ func TestPOSIXEREIntegration(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ast, err := ere.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			validateSVG(t, svg)
+		})
+	}
+}
+
+// TestPOSIXBREGoldenFiles tests POSIX BRE patterns against golden file outputs
+func TestPOSIXBREGoldenFiles(t *testing.T) {
+	goldenDir := "testdata/golden/posix-bre"
+
+	// Create golden directory if it doesn't exist
+	if err := os.MkdirAll(goldenDir, 0755); err != nil {
+		t.Fatalf("failed to create golden directory: %v", err)
+	}
+
+	bre := &posix_bre.POSIXBRE{}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		// Basic literals - note + ? | ( ) { } are literal in BRE!
+		{"literal", "abc"},
+		{"literal-special", "a+b?c|d"},
+		{"literal-parens", "(abc)"},
+
+		// BRE groups with \( \)
+		{"group", `\(abc\)`},
+		{"group-nested", `\(\(a\)\(b\)\)`},
+
+		// Character sets
+		{"charset", "[a-z]"},
+		{"charset-negated", "[^0-9]"},
+
+		// POSIX classes
+		{"posix-alpha", "[[:alpha:]]"},
+		{"posix-digit", "[[:digit:]]"},
+		{"posix-alnum", "[[:alnum:]]"},
+		{"posix-space", "[[:space:]]"},
+		{"posix-multiple", "[[:alpha:][:digit:]]"},
+		{"posix-negated", "[^[:digit:]]"},
+
+		// Quantifiers (only * and \{n,m\} in BRE)
+		{"quantifier-star", "a*"},
+		{"quantifier-exact", `a\{3\}`},
+		{"quantifier-min", `a\{2,\}`},
+		{"quantifier-range", `a\{2,5\}`},
+
+		// Back-references (BRE supports these!)
+		{"backref", `\(a\)\1`},
+		{"backref-word", `\([[:alpha:]]*\) \1`},
+
+		// Anchors
+		{"anchor", "^start$"},
+
+		// Complex BRE patterns
+		{"complex-word", `\([[:alpha:]]*\)\1`},
+		{"complex-phone", `[0-9]\{3\}-[0-9]\{4\}`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := bre.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error for pattern %q: %v", tc.pattern, err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			goldenPath := filepath.Join(goldenDir, tc.name+".svg")
+
+			// If GOLDEN_UPDATE env var is set, update golden files
+			if os.Getenv("GOLDEN_UPDATE") != "" {
+				if err := os.WriteFile(goldenPath, []byte(svg), 0644); err != nil {
+					t.Fatalf("failed to write golden file: %v", err)
+				}
+				t.Logf("Updated golden file: %s", goldenPath)
+				return
+			}
+
+			// Check if golden file exists
+			golden, err := os.ReadFile(goldenPath)
+			if os.IsNotExist(err) {
+				// Golden file doesn't exist, create it
+				if err := os.WriteFile(goldenPath, []byte(svg), 0644); err != nil {
+					t.Fatalf("failed to create golden file: %v", err)
+				}
+				t.Logf("Created golden file: %s", goldenPath)
+				return
+			} else if err != nil {
+				t.Fatalf("failed to read golden file: %v", err)
+			}
+
+			// Compare with golden file
+			if svg != string(golden) {
+				t.Errorf("SVG output differs from golden file %s", goldenPath)
+				t.Logf("Run with GOLDEN_UPDATE=1 to update golden files")
+			}
+		})
+	}
+}
+
+// TestPOSIXBREIntegration tests complete POSIX BRE rendering pipeline
+func TestPOSIXBREIntegration(t *testing.T) {
+	bre := &posix_bre.POSIXBRE{}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		{"identifier", "[[:alpha:]_][[:alnum:]_]*"},
+		{"phone", `[0-9]\{3\}-[0-9]\{4\}`},
+		{"date", `[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}`},
+		{"hex", "[[:xdigit:]]*"},
+		{"word-repeat", `\([[:alpha:]]*\) \1`},
+		{"literal-operators", "1+2=3"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := bre.Parse(tc.pattern)
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
