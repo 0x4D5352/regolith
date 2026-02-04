@@ -1,0 +1,267 @@
+{
+package parser
+
+// parserState returns the parser state from the global state map
+func parserState(c *current) *ParserState {
+    return c.globalStore["state"].(*ParserState)
+}
+}
+
+// Entry point - supports both /pattern/flags and plain pattern formats
+Root <- SlashDelimited / PlainRegexp
+
+// Slash-delimited format: /pattern/flags
+SlashDelimited <- '/' regexp:Regexp '/' flags:Flags? EOF {
+    r := regexp.(*Regexp)
+    if flags != nil {
+        r.Flags = flags.(string)
+    }
+    return r, nil
+}
+
+// Plain pattern without delimiters
+PlainRegexp <- regexp:Regexp EOF {
+    return regexp.(*Regexp), nil
+}
+
+// Flags at the end of a regex (dimgsuy)
+Flags <- [dimgsuy]+ {
+    return string(c.text), nil
+}
+
+// Regexp is alternation of matches separated by |
+Regexp <- first:Match rest:( '|' Match )* {
+    matches := []*Match{first.(*Match)}
+    if rest != nil {
+        for _, r := range rest.([]any) {
+            pair := r.([]any)
+            matches = append(matches, pair[1].(*Match))
+        }
+    }
+    return &Regexp{Matches: matches}, nil
+}
+
+// Match is a sequence of fragments
+Match <- frags:MatchFragment* {
+    fragments := []*MatchFragment{}
+    if frags != nil {
+        for _, f := range frags.([]any) {
+            fragments = append(fragments, f.(*MatchFragment))
+        }
+    }
+    return &Match{Fragments: fragments}, nil
+}
+
+// MatchFragment is content with optional repeat
+MatchFragment <- content:Content repeat:Repeat? {
+    mf := &MatchFragment{Content: content.(Node)}
+    if repeat != nil {
+        mf.Repeat = repeat.(*Repeat)
+    }
+    return mf, nil
+}
+
+// Content is what can appear in a match fragment
+Content <- Anchor / Subexp / Charset / Terminal
+
+// Anchor: ^ or $
+Anchor <- ( '^' / '$' ) {
+    anchorType := "start"
+    if string(c.text) == "$" {
+        anchorType = "end"
+    }
+    return &Anchor{AnchorType: anchorType}, nil
+}
+
+// Subexp: groups with optional type marker
+Subexp <- '(' groupType:GroupType? regexp:Regexp ')' {
+    s := &Subexp{Regexp: regexp.(*Regexp)}
+    if groupType != nil {
+        switch gt := groupType.(type) {
+        case string:
+            // Simple group type (non_capture, lookahead, lookbehind)
+            s.GroupType = gt
+            s.Number = 0
+        case map[string]any:
+            // Named capture group
+            s.GroupType = gt["type"].(string)
+            s.Name = gt["name"].(string)
+            s.Number = parserState(c).NextGroupNumber()
+        }
+    } else {
+        s.GroupType = "capture"
+        s.Number = parserState(c).NextGroupNumber()
+    }
+    return s, nil
+}
+
+// GroupType: (?:, (?=, (?!, (?<=, (?<!, (?<name>
+// Note: lookbehind patterns (?<= and (?<!) must come before named groups (?<name>)
+GroupType <- "?:" { return "non_capture", nil }
+          / "?=" { return "positive_lookahead", nil }
+          / "?!" { return "negative_lookahead", nil }
+          / "?<=" { return "positive_lookbehind", nil }
+          / "?<!" { return "negative_lookbehind", nil }
+          / "?<" name:GroupName ">" {
+              return map[string]any{"type": "named_capture", "name": name.(string)}, nil
+          }
+
+// GroupName: valid identifier for group names (letters, digits, underscore, starting with letter or underscore)
+GroupName <- [a-zA-Z_][a-zA-Z0-9_]* {
+    return string(c.text), nil
+}
+
+// Charset: [...] or [^...]
+Charset <- '[' inverted:'^'? items:CharsetItem* ']' {
+    charset := &Charset{
+        Inverted: inverted != nil,
+        Items:    []CharsetItem{},
+    }
+    if items != nil {
+        for _, item := range items.([]any) {
+            charset.Items = append(charset.Items, item.(CharsetItem))
+        }
+    }
+    return charset, nil
+}
+
+// CharsetItem: range or single character/escape
+CharsetItem <- CharsetRange / CharsetEscape / CharsetLiteral
+
+// CharsetRange: a-z
+CharsetRange <- first:CharsetRangeBound '-' last:CharsetRangeBound {
+    return &CharsetRange{
+        First: first.(string),
+        Last:  last.(string),
+    }, nil
+}
+
+// CharsetRangeBound: what can be a range endpoint
+CharsetRangeBound <- CharsetRangeEscape / CharsetRangeLiteral
+
+// CharsetRangeEscape: escaped char that can be a range bound
+CharsetRangeEscape <- '\\' [bfnrtv] {
+    return string(c.text), nil
+} / '\\' 'x' [0-9a-fA-F] [0-9a-fA-F] {
+    return string(c.text), nil
+} / '\\' 'u' '{' [0-9a-fA-F]+ '}' {
+    // Braced Unicode escape for range bound
+    return string(c.text), nil
+} / '\\' 'u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] {
+    return string(c.text), nil
+} / '\\' '0' [0-7]* {
+    return string(c.text), nil
+} / '\\' 'c' [a-zA-Z] {
+    return string(c.text), nil
+}
+
+// CharsetRangeLiteral: literal char in a range context (not - or ] or \)
+CharsetRangeLiteral <- [^-\]\\] {
+    return string(c.text), nil
+} / '\\' . {
+    return string(c.text), nil
+}
+
+// CharsetEscape: escape sequence in charset
+CharsetEscape <- '\\' code:[bdDfnrsStvwW] {
+    return makeEscape(string([]byte{code.([]byte)[0]})), nil
+} / '\\' 'x' [0-9a-fA-F] [0-9a-fA-F] {
+    return &Escape{EscapeType: "hex", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'u' '{' [0-9a-fA-F]+ '}' {
+    // Braced Unicode escape \u{HHHHHH} for code points beyond BMP
+    return &Escape{EscapeType: "unicode_braced", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] {
+    return &Escape{EscapeType: "unicode", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' '0' [0-7]* {
+    return &Escape{EscapeType: "octal", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'c' [a-zA-Z] {
+    return &Escape{EscapeType: "control", Code: string(c.text), Value: string(c.text)}, nil
+}
+
+// CharsetLiteral: literal character in charset (not ] or \)
+CharsetLiteral <- [^\]\\] {
+    return &CharsetLiteral{Text: string(c.text)}, nil
+} / '\\' char:. {
+    return &CharsetLiteral{Text: string(char.([]byte))}, nil
+}
+
+// Terminal: what can appear outside groups/charsets
+Terminal <- AnyChar / Escape / Literal
+
+// AnyChar: the . metacharacter
+AnyChar <- '.' {
+    return &AnyCharacter{}, nil
+}
+
+// Escape: escape sequences
+Escape <- '\\' code:[bBdDfnrsStvwW] {
+    return makeEscape(string([]byte{code.([]byte)[0]})), nil
+} / '\\' 'p' '{' prop:UnicodePropertyValue '}' {
+    // Unicode property escape \p{...}
+    return &UnicodePropertyEscape{Property: prop.(string), Negated: false}, nil
+} / '\\' 'P' '{' prop:UnicodePropertyValue '}' {
+    // Negated Unicode property escape \P{...}
+    return &UnicodePropertyEscape{Property: prop.(string), Negated: true}, nil
+} / '\\' 'k' '<' name:GroupName '>' {
+    // Named backreference \k<name>
+    return &BackReference{Name: name.(string)}, nil
+} / '\\' code:[1-9] {
+    num := int(code.([]byte)[0] - '0')
+    return &BackReference{Number: num}, nil
+} / '\\' 'x' [0-9a-fA-F] [0-9a-fA-F] {
+    return &Escape{EscapeType: "hex", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'u' '{' [0-9a-fA-F]+ '}' {
+    // Braced Unicode escape \u{HHHHHH} for code points beyond BMP
+    return &Escape{EscapeType: "unicode_braced", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] {
+    return &Escape{EscapeType: "unicode", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' '0' [0-7]* {
+    return &Escape{EscapeType: "octal", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'c' [a-zA-Z] {
+    return &Escape{EscapeType: "control", Code: string(c.text), Value: string(c.text)}, nil
+}
+
+// UnicodePropertyValue: property name like "Letter", "L", "Script=Greek"
+UnicodePropertyValue <- [a-zA-Z0-9_=]+ {
+    return string(c.text), nil
+}
+
+// Literal: regular characters (not metacharacters)
+Literal <- LiteralChars+ {
+    return &Literal{Text: string(c.text)}, nil
+} / '\\' char:. {
+    // Escaped character becomes literal
+    return &Literal{Text: string(char.([]byte))}, nil
+}
+
+// LiteralChars: characters that don't need escaping in a regex
+// Note: / is excluded so /pattern/flags format works
+LiteralChars <- [a-zA-Z0-9_ !@#%&:;"'<>,`~=-]
+
+// Repeat: quantifiers
+Repeat <- spec:RepeatSpec greedy:'?'? {
+    r := spec.(*Repeat)
+    r.Greedy = greedy == nil
+    return r, nil
+}
+
+// RepeatSpec: the quantifier itself
+RepeatSpec <- '*' {
+    return &Repeat{Min: 0, Max: -1, Greedy: true}, nil
+} / '+' {
+    return &Repeat{Min: 1, Max: -1, Greedy: true}, nil
+} / '?' {
+    return &Repeat{Min: 0, Max: 1, Greedy: true}, nil
+} / '{' min:[0-9]+ ',' max:[0-9]+ '}' {
+    minVal := parseInt(min)
+    maxVal := parseInt(max)
+    return &Repeat{Min: minVal, Max: maxVal, Greedy: true}, nil
+} / '{' min:[0-9]+ ',' '}' {
+    minVal := parseInt(min)
+    return &Repeat{Min: minVal, Max: -1, Greedy: true}, nil
+} / '{' exact:[0-9]+ '}' {
+    val := parseInt(exact)
+    return &Repeat{Min: val, Max: val, Greedy: true}, nil
+}
+
+EOF <- !.
