@@ -1,20 +1,16 @@
 package parser
 
-import "fmt"
+import (
+	"github.com/0x4d5352/regolith/internal/ast"
+	"github.com/0x4d5352/regolith/internal/flavor/javascript"
+)
 
-// ParseRegex parses a regex pattern and returns the AST
-func ParseRegex(pattern string) (*Regexp, error) {
-	state := NewParserState()
+// jsFlavor is the JavaScript flavor instance used for parsing.
+var jsFlavor = &javascript.JavaScript{}
 
-	result, err := Parse("", []byte(pattern), GlobalStore("state", state))
-	if err != nil {
-		return nil, fmt.Errorf("parse error: %w", err)
-	}
-
-	regexp, ok := result.(*Regexp)
-	if !ok {
-		return nil, fmt.Errorf("unexpected parse result type: %T", result)
-	}
-
-	return regexp, nil
+// ParseRegex parses a regex pattern using the JavaScript flavor and returns the AST.
+// This function is maintained for backward compatibility.
+// For explicit flavor selection, use the flavor package directly.
+func ParseRegex(pattern string) (*ast.Regexp, error) {
+	return jsFlavor.Parse(pattern)
 }

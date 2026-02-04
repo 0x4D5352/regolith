@@ -1,6 +1,10 @@
-package parser
+package javascript
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/0x4d5352/regolith/internal/ast"
+)
 
 // parseInt parses an integer from PEG match result
 func parseInt(v any) int {
@@ -22,8 +26,8 @@ func parseInt(v any) int {
 }
 
 // makeEscape creates an Escape node from an escape code character
-func makeEscape(code string) *Escape {
-	escape := &Escape{Code: code}
+func makeEscape(code string) *ast.Escape {
+	escape := &ast.Escape{Code: code}
 
 	switch code {
 	case "d":

@@ -1,140 +1,83 @@
+// Package parser provides regex parsing functionality.
+// For backward compatibility, AST types are aliased from internal/ast.
 package parser
 
-// Node is the interface all AST nodes implement
-type Node interface {
-	Type() string
-}
+import "github.com/0x4d5352/regolith/internal/ast"
 
-// Regexp is the root node representing the entire regex
-type Regexp struct {
-	Matches []*Match // Alternation branches
-	Flags   string   // Optional flags (gimuy)
-}
+// Type aliases for backward compatibility
+// These allow existing code to continue using parser.Regexp, parser.Match, etc.
 
-func (r *Regexp) Type() string { return "regexp" }
+type Node = ast.Node
+type Regexp = ast.Regexp
+type Match = ast.Match
+type MatchFragment = ast.MatchFragment
+type Literal = ast.Literal
+type AnyCharacter = ast.AnyCharacter
+type Anchor = ast.Anchor
+type Subexp = ast.Subexp
+type Repeat = ast.Repeat
+type Charset = ast.Charset
+type CharsetItem = ast.CharsetItem
+type CharsetLiteral = ast.CharsetLiteral
+type CharsetRange = ast.CharsetRange
+type Escape = ast.Escape
+type BackReference = ast.BackReference
+type UnicodePropertyEscape = ast.UnicodePropertyEscape
+type ParserState = ast.ParserState
 
-// Match represents a sequence of fragments (one branch of alternation)
-type Match struct {
-	Fragments []*MatchFragment
-}
+// Function aliases
+var NewParserState = ast.NewParserState
 
-func (m *Match) Type() string { return "match" }
+// Anchor type constants (re-exported for compatibility)
+const (
+	AnchorStart           = ast.AnchorStart
+	AnchorEnd             = ast.AnchorEnd
+	AnchorWordBoundary    = ast.AnchorWordBoundary
+	AnchorNonWordBoundary = ast.AnchorNonWordBoundary
+	AnchorStringStart     = ast.AnchorStringStart
+	AnchorStringEnd       = ast.AnchorStringEnd
+	AnchorAbsoluteEnd     = ast.AnchorAbsoluteEnd
+	AnchorWordStart       = ast.AnchorWordStart
+	AnchorWordEnd         = ast.AnchorWordEnd
+)
 
-// MatchFragment represents a content node with optional repeat
-type MatchFragment struct {
-	Content Node    // Literal, Escape, Charset, Subexp, Anchor, AnyCharacter
-	Repeat  *Repeat // nil if no quantifier
-}
+// Group type constants (re-exported for compatibility)
+const (
+	GroupCapture            = ast.GroupCapture
+	GroupNonCapture         = ast.GroupNonCapture
+	GroupPositiveLookahead  = ast.GroupPositiveLookahead
+	GroupNegativeLookahead  = ast.GroupNegativeLookahead
+	GroupPositiveLookbehind = ast.GroupPositiveLookbehind
+	GroupNegativeLookbehind = ast.GroupNegativeLookbehind
+	GroupNamedCapture       = ast.GroupNamedCapture
+	GroupAtomic             = ast.GroupAtomic
+)
 
-func (mf *MatchFragment) Type() string { return "match_fragment" }
+// Future AST types (re-exported for compatibility)
+// These are placeholders for when flavors are implemented
+type POSIXClass = ast.POSIXClass
+type AtomicGroup = ast.AtomicGroup
+type Conditional = ast.Conditional
+type RecursiveRef = ast.RecursiveRef
+type BalancedGroup = ast.BalancedGroup
+type Comment = ast.Comment
+type QuotedLiteral = ast.QuotedLiteral
+type InlineModifier = ast.InlineModifier
+type BranchReset = ast.BranchReset
+type BacktrackControl = ast.BacktrackControl
 
-// Literal represents one or more literal characters
-type Literal struct {
-	Text string
-}
-
-func (l *Literal) Type() string { return "literal" }
-
-// AnyCharacter represents the . metacharacter
-type AnyCharacter struct{}
-
-func (a *AnyCharacter) Type() string { return "any_character" }
-
-// Anchor represents ^, $, \b, \B
-type Anchor struct {
-	AnchorType string // "start", "end", "word_boundary", "non_word_boundary"
-}
-
-func (a *Anchor) Type() string { return "anchor" }
-
-// Subexp represents a group: (), (?:), (?=), (?!), (?<=), (?<!), (?<name>)
-type Subexp struct {
-	GroupType string  // "capture", "non_capture", "positive_lookahead", "negative_lookahead", "positive_lookbehind", "negative_lookbehind", "named_capture"
-	Number    int     // Capture group number (0 if non-capture/lookbehind)
-	Name      string  // Group name for named capture groups (empty otherwise)
-	Regexp    *Regexp // The contained expression
-}
-
-func (s *Subexp) Type() string { return "subexp" }
-
-// Repeat represents quantifiers: *, +, ?, {n}, {n,}, {n,m}
-type Repeat struct {
-	Min    int  // Minimum repetitions
-	Max    int  // Maximum repetitions (-1 for unbounded)
-	Greedy bool // true if greedy, false if non-greedy (has trailing ?)
-}
-
-func (r *Repeat) Type() string { return "repeat" }
-
-// Charset represents a character class: [abc], [^abc], [a-z]
-type Charset struct {
-	Inverted bool          // true if negated [^...]
-	Items    []CharsetItem // Contents of the charset
-}
-
-func (c *Charset) Type() string { return "charset" }
-
-// CharsetItem can be a literal, escape, or range within a charset
-type CharsetItem interface {
-	Node
-	isCharsetItem()
-}
-
-// CharsetLiteral is a literal character within a charset
-type CharsetLiteral struct {
-	Text string
-}
-
-func (cl *CharsetLiteral) Type() string    { return "charset_literal" }
-func (cl *CharsetLiteral) isCharsetItem()  {}
-
-// CharsetRange represents a range like a-z within a charset
-type CharsetRange struct {
-	First string // Starting character
-	Last  string // Ending character
-}
-
-func (cr *CharsetRange) Type() string    { return "charset_range" }
-func (cr *CharsetRange) isCharsetItem()  {}
-
-// Escape represents escape sequences: \d, \w, \s, \n, etc.
-type Escape struct {
-	EscapeType string // "digit", "word", "whitespace", "newline", etc.
-	Code       string // The original escape code (e.g., "d", "w", "n")
-	Value      string // Display value/description
-}
-
-func (e *Escape) Type() string    { return "escape" }
-func (e *Escape) isCharsetItem()  {}
-
-// BackReference represents \1 through \9 or \k<name>
-type BackReference struct {
-	Number int    // The group number being referenced (0 for named refs)
-	Name   string // The group name for named backreferences (empty for numbered)
-}
-
-func (br *BackReference) Type() string { return "back_reference" }
-
-// UnicodePropertyEscape represents \p{...} and \P{...}
-type UnicodePropertyEscape struct {
-	Property string // The property name (e.g., "Letter", "L", "Script=Greek")
-	Negated  bool   // true for \P{...}, false for \p{...}
-}
-
-func (upe *UnicodePropertyEscape) Type() string { return "unicode_property_escape" }
-
-// ParserState tracks state during parsing
-type ParserState struct {
-	GroupCounter int // For numbering capture groups
-}
-
-// NewParserState creates a new parser state
-func NewParserState() *ParserState {
-	return &ParserState{GroupCounter: 0}
-}
-
-// NextGroupNumber returns the next capture group number
-func (ps *ParserState) NextGroupNumber() int {
-	ps.GroupCounter++
-	return ps.GroupCounter
-}
+// POSIX class name constants (re-exported for compatibility)
+const (
+	POSIXAlnum  = ast.POSIXAlnum
+	POSIXAlpha  = ast.POSIXAlpha
+	POSIXBlank  = ast.POSIXBlank
+	POSIXCntrl  = ast.POSIXCntrl
+	POSIXDigit  = ast.POSIXDigit
+	POSIXGraph  = ast.POSIXGraph
+	POSIXLower  = ast.POSIXLower
+	POSIXPrint  = ast.POSIXPrint
+	POSIXPunct  = ast.POSIXPunct
+	POSIXSpace  = ast.POSIXSpace
+	POSIXUpper  = ast.POSIXUpper
+	POSIXXdigit = ast.POSIXXdigit
+)

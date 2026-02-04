@@ -2,6 +2,7 @@
 
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
+PIGEON := $(shell go env GOPATH)/bin/pigeon
 
 # Default target
 all: generate build test
@@ -23,10 +24,18 @@ coverage:
 	go test -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 
-# Generate parser from grammar
-generate:
-	@which pigeon > /dev/null || (echo "Installing pigeon..." && go install github.com/mna/pigeon@latest)
-	pigeon -o internal/parser/parser.go internal/parser/grammar.peg
+# Generate all parsers from grammars
+.PHONY: generate
+generate: generate-javascript
+
+# Generate JavaScript parser
+.PHONY: generate-javascript
+generate-javascript: $(PIGEON)
+	$(PIGEON) -o internal/flavor/javascript/parser.go internal/flavor/javascript/grammar.peg
+
+# Install pigeon if needed
+$(PIGEON):
+	go install github.com/mna/pigeon@latest
 
 # Clean build artifacts
 clean:
@@ -64,13 +73,14 @@ fmt:
 # Show help
 help:
 	@echo "Available targets:"
-	@echo "  build     - Build for current platform"
-	@echo "  install   - Install to GOPATH/bin"
-	@echo "  test      - Run tests"
-	@echo "  coverage  - Run tests with coverage report"
-	@echo "  generate  - Regenerate parser from grammar"
-	@echo "  clean     - Remove build artifacts"
-	@echo "  release   - Cross-compile for all platforms"
-	@echo "  golden    - Update golden test files"
-	@echo "  lint      - Run linter"
-	@echo "  fmt       - Format code"
+	@echo "  build              - Build for current platform"
+	@echo "  install            - Install to GOPATH/bin"
+	@echo "  test               - Run tests"
+	@echo "  coverage           - Run tests with coverage report"
+	@echo "  generate           - Regenerate all parsers from grammars"
+	@echo "  generate-javascript - Regenerate JavaScript parser"
+	@echo "  clean              - Remove build artifacts"
+	@echo "  release            - Cross-compile for all platforms"
+	@echo "  golden             - Update golden test files"
+	@echo "  lint               - Run linter"
+	@echo "  fmt                - Format code"
