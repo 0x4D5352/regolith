@@ -1,0 +1,381 @@
+{
+package dotnet
+
+import "github.com/0x4d5352/regolith/internal/ast"
+
+// parserState returns the parser state from the global state map
+func parserState(c *current) *ast.ParserState {
+    return c.globalStore["state"].(*ast.ParserState)
+}
+}
+
+// Entry point - .NET patterns are plain strings (no /pattern/flags format)
+Root <- regexp:Regexp EOF {
+    return regexp.(*ast.Regexp), nil
+}
+
+// Regexp is alternation of matches separated by |
+Regexp <- first:Match rest:( '|' Match )* {
+    matches := []*ast.Match{first.(*ast.Match)}
+    if rest != nil {
+        for _, r := range rest.([]any) {
+            pair := r.([]any)
+            matches = append(matches, pair[1].(*ast.Match))
+        }
+    }
+    return &ast.Regexp{Matches: matches}, nil
+}
+
+// Match is a sequence of fragments
+Match <- frags:MatchFragment* {
+    fragments := []*ast.MatchFragment{}
+    if frags != nil {
+        for _, f := range frags.([]any) {
+            fragments = append(fragments, f.(*ast.MatchFragment))
+        }
+    }
+    return &ast.Match{Fragments: fragments}, nil
+}
+
+// MatchFragment is content with optional repeat
+MatchFragment <- content:Content repeat:Repeat? {
+    mf := &ast.MatchFragment{Content: content.(ast.Node)}
+    if repeat != nil {
+        mf.Repeat = repeat.(*ast.Repeat)
+    }
+    return mf, nil
+}
+
+// Content is what can appear in a match fragment
+// Note: Comment and InlineModifier must come before Subexp since they start with (?
+// Note: BalancedGroup must come before Subexp since it also starts with (?
+Content <- Anchor / Comment / InlineModifier / BalancedGroup / Subexp / Charset / Terminal
+
+// Comment: (?#...) - inline comment, matches nothing
+Comment <- "(?#" text:CommentText ')' {
+    return &ast.Comment{Text: text.(string)}, nil
+}
+
+// InlineModifier: (?flags), (?-flags), (?flags-flags), or scoped (?flags:X)
+// .NET flags: i (case-insensitive), m (multiline), s (singleline), n (explicit capture), x (ignore whitespace)
+InlineModifier <- "(?" enable:Flags? '-' disable:Flags ':' regexp:Regexp ')' {
+    // Scoped modifier with both enable and disable: (?i-m:X)
+    enableStr := ""
+    if enable != nil {
+        enableStr = enable.(string)
+    }
+    return &ast.InlineModifier{
+        Enable:  enableStr,
+        Disable: disable.(string),
+        Regexp:  regexp.(*ast.Regexp),
+    }, nil
+} / "(?" enable:Flags ':' regexp:Regexp ')' {
+    // Scoped modifier with enable only: (?i:X)
+    return &ast.InlineModifier{
+        Enable: enable.(string),
+        Regexp: regexp.(*ast.Regexp),
+    }, nil
+} / "(?" enable:Flags? '-' disable:Flags ')' {
+    // Global modifier with both enable and disable: (?i-m) or (?-m)
+    enableStr := ""
+    if enable != nil {
+        enableStr = enable.(string)
+    }
+    return &ast.InlineModifier{
+        Enable:  enableStr,
+        Disable: disable.(string),
+    }, nil
+} / "(?" enable:Flags ')' {
+    // Global modifier with enable only: (?i)
+    return &ast.InlineModifier{
+        Enable: enable.(string),
+    }, nil
+}
+
+// Flags: one or more .NET regex flags
+// i = case-insensitive, m = multiline, s = singleline, n = explicit capture, x = ignore whitespace
+Flags <- [imsnx]+ {
+    return string(c.text), nil
+}
+
+// CommentText: everything until the closing )
+CommentText <- [^)]* {
+    return string(c.text), nil
+}
+
+// Anchor: ^ or $
+Anchor <- ( '^' / '$' ) {
+    anchorType := "start"
+    if string(c.text) == "$" {
+        anchorType = "end"
+    }
+    return &ast.Anchor{AnchorType: anchorType}, nil
+}
+
+// BalancedGroup: (?<name-other>...), (?'name-other'...), (?<-name>...), (?'-name'...)
+// These must be parsed before regular named groups!
+BalancedGroup <- "(?<" name:GroupName '-' other:GroupName '>' regexp:Regexp ')' {
+    // Capturing balanced group: (?<name-other>...)
+    return &ast.BalancedGroup{
+        Name:      name.(string),
+        OtherName: other.(string),
+        Regexp:    regexp.(*ast.Regexp),
+    }, nil
+} / "(?'" name:GroupName '-' other:GroupName "'" regexp:Regexp ')' {
+    // Capturing balanced group with single quotes: (?'name-other'...)
+    return &ast.BalancedGroup{
+        Name:      name.(string),
+        OtherName: other.(string),
+        Regexp:    regexp.(*ast.Regexp),
+    }, nil
+} / "(?<-" name:GroupName '>' regexp:Regexp ')' {
+    // Non-capturing balanced group: (?<-name>...)
+    // Empty Name indicates non-capturing
+    return &ast.BalancedGroup{
+        Name:      "",
+        OtherName: name.(string),
+        Regexp:    regexp.(*ast.Regexp),
+    }, nil
+} / "(?'-" name:GroupName "'" regexp:Regexp ')' {
+    // Non-capturing balanced group with single quotes: (?'-name'...)
+    return &ast.BalancedGroup{
+        Name:      "",
+        OtherName: name.(string),
+        Regexp:    regexp.(*ast.Regexp),
+    }, nil
+}
+
+// Subexp: groups with optional type marker
+// .NET supports: (), (?:), (?=), (?!), (?<=), (?<!), (?<name>), (?'name'), (?>)
+Subexp <- '(' groupType:GroupType? regexp:Regexp ')' {
+    s := &ast.Subexp{Regexp: regexp.(*ast.Regexp)}
+    if groupType != nil {
+        switch gt := groupType.(type) {
+        case string:
+            // Simple group type (non_capture, lookahead, lookbehind, atomic)
+            s.GroupType = gt
+            s.Number = 0
+        case map[string]any:
+            // Named capture group
+            s.GroupType = gt["type"].(string)
+            s.Name = gt["name"].(string)
+            s.Number = parserState(c).NextGroupNumber()
+        }
+    } else {
+        s.GroupType = "capture"
+        s.Number = parserState(c).NextGroupNumber()
+    }
+    return s, nil
+}
+
+// GroupType: (?:, (?=, (?!, (?<=, (?<!, (?<name>, (?'name', (?>
+// Note: lookbehind patterns (?<= and (?<!) must come before named groups (?<name>)
+// Note: (?> must come before other group types
+GroupType <- "?>" { return "atomic", nil }
+          / "?:" { return "non_capture", nil }
+          / "?=" { return "positive_lookahead", nil }
+          / "?!" { return "negative_lookahead", nil }
+          / "?<=" { return "positive_lookbehind", nil }
+          / "?<!" { return "negative_lookbehind", nil }
+          / "?<" name:GroupName ">" {
+              return map[string]any{"type": "named_capture", "name": name.(string)}, nil
+          }
+          / "?'" name:GroupName "'" {
+              // Single-quote syntax for named groups: (?'name'...)
+              return map[string]any{"type": "named_capture", "name": name.(string)}, nil
+          }
+
+// GroupName: valid identifier for group names
+// .NET: name must start with a letter or underscore, then letters, digits, underscores
+GroupName <- [a-zA-Z_][a-zA-Z0-9_]* {
+    return string(c.text), nil
+}
+
+// Charset: [...] or [^...]
+Charset <- '[' inverted:'^'? items:CharsetItem* ']' {
+    charset := &ast.Charset{
+        Inverted: inverted != nil,
+        Items:    []ast.CharsetItem{},
+    }
+    if items != nil {
+        for _, item := range items.([]any) {
+            charset.Items = append(charset.Items, item.(ast.CharsetItem))
+        }
+    }
+    return charset, nil
+}
+
+// CharsetItem: range or single character/escape
+CharsetItem <- CharsetRange / CharsetEscape / CharsetLiteral
+
+// CharsetRange: a-z
+CharsetRange <- first:CharsetRangeBound '-' last:CharsetRangeBound {
+    return &ast.CharsetRange{
+        First: first.(string),
+        Last:  last.(string),
+    }, nil
+}
+
+// CharsetRangeBound: what can be a range endpoint
+CharsetRangeBound <- CharsetRangeEscape / CharsetRangeLiteral
+
+// CharsetRangeEscape: escaped char that can be a range bound
+CharsetRangeEscape <- '\\' [bfnrtave] {
+    return string(c.text), nil
+} / '\\' 'x' [0-9a-fA-F] [0-9a-fA-F] {
+    return string(c.text), nil
+} / '\\' 'u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] {
+    return string(c.text), nil
+} / '\\' '0' [0-7]* {
+    return string(c.text), nil
+} / '\\' 'c' [a-zA-Z] {
+    return string(c.text), nil
+}
+
+// CharsetRangeLiteral: literal char in a range context (not - or ] or \)
+CharsetRangeLiteral <- [^-\]\\] {
+    return string(c.text), nil
+} / '\\' . {
+    return string(c.text), nil
+}
+
+// CharsetEscape: escape sequence in charset
+// .NET supports: \d \D \w \W \s \S (standard character class escapes)
+// Note: \v in .NET is vertical tab (like JavaScript), not vertical whitespace class (unlike Java)
+CharsetEscape <- '\\' code:[bdDsSwW] {
+    return makeEscape(string([]byte{code.([]byte)[0]})), nil
+} / '\\' code:[fnrtave] {
+    return makeEscape(string([]byte{code.([]byte)[0]})), nil
+} / '\\' 'x' [0-9a-fA-F] [0-9a-fA-F] {
+    return &ast.Escape{EscapeType: "hex", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] {
+    return &ast.Escape{EscapeType: "unicode", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' '0' [0-7]* {
+    return &ast.Escape{EscapeType: "octal", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'c' [a-zA-Z] {
+    return &ast.Escape{EscapeType: "control", Code: string(c.text), Value: string(c.text)}, nil
+}
+
+// CharsetLiteral: literal character in charset (not ] or \)
+CharsetLiteral <- [^\]\\] {
+    return &ast.CharsetLiteral{Text: string(c.text)}, nil
+} / '\\' char:. {
+    return &ast.CharsetLiteral{Text: string(char.([]byte))}, nil
+}
+
+// Terminal: what can appear outside groups/charsets
+// QuotedLiteral must come before Escape to match \Q...\E
+Terminal <- AnyChar / QuotedLiteral / Escape / Literal
+
+// QuotedLiteral: \Q...\E - treat everything between as literal text
+QuotedLiteral <- "\\Q" text:QuotedText "\\E" {
+    return &ast.QuotedLiteral{Text: text.(string)}, nil
+}
+
+// QuotedText: everything until \E (greedy but stops at \E)
+QuotedText <- ( !("\\E") . )* {
+    return string(c.text), nil
+}
+
+// AnyChar: the . metacharacter
+AnyChar <- '.' {
+    return &ast.AnyCharacter{}, nil
+}
+
+// Escape: escape sequences
+// .NET supports: \b \B \A \Z \z for anchors
+// .NET supports: \d \D \w \W \s \S for character classes
+// .NET: \v is vertical tab, \a is bell, \e is escape
+// .NET named backreferences: \k<name> or \k'name'
+Escape <- '\\' code:[bBAZz] {
+    return makeAnchor(string([]byte{code.([]byte)[0]})), nil
+} / '\\' code:[dDwWsS] {
+    return makeEscape(string([]byte{code.([]byte)[0]})), nil
+} / '\\' code:[fnrtave] {
+    return makeEscape(string([]byte{code.([]byte)[0]})), nil
+} / '\\' 'p' '{' prop:UnicodePropertyValue '}' {
+    // Unicode property escape \p{...}
+    return &ast.UnicodePropertyEscape{Property: prop.(string), Negated: false}, nil
+} / '\\' 'P' '{' prop:UnicodePropertyValue '}' {
+    // Negated Unicode property escape \P{...}
+    return &ast.UnicodePropertyEscape{Property: prop.(string), Negated: true}, nil
+} / '\\' 'k' '<' name:GroupName '>' {
+    // Named backreference \k<name>
+    return &ast.BackReference{Name: name.(string)}, nil
+} / '\\' 'k' '\'' name:GroupName '\'' {
+    // Named backreference with single quotes \k'name'
+    return &ast.BackReference{Name: name.(string)}, nil
+} / '\\' code:[1-9] rest:[0-9]* {
+    // Back-reference \1 through \99 (or higher if groups exist)
+    numStr := string(code.([]byte)) + getString(rest)
+    num := parseInt(numStr)
+    return &ast.BackReference{Number: num}, nil
+} / '\\' 'x' [0-9a-fA-F] [0-9a-fA-F] {
+    return &ast.Escape{EscapeType: "hex", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] {
+    return &ast.Escape{EscapeType: "unicode", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' '0' [0-7]* {
+    return &ast.Escape{EscapeType: "octal", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'c' [a-zA-Z] {
+    return &ast.Escape{EscapeType: "control", Code: string(c.text), Value: string(c.text)}, nil
+}
+
+// UnicodePropertyValue: property name like "L", "Lu", "IsLatin", "InBasicLatin", etc.
+// .NET supports: Category codes (L, Lu), Named blocks (IsBasicLatin), Script names
+UnicodePropertyValue <- [a-zA-Z0-9_]+ {
+    return string(c.text), nil
+}
+
+// Literal: regular characters (not metacharacters)
+Literal <- LiteralChars+ {
+    return &ast.Literal{Text: string(c.text)}, nil
+} / '\\' char:. {
+    // Escaped character becomes literal
+    return &ast.Literal{Text: string(char.([]byte))}, nil
+}
+
+// LiteralChars: characters that don't need escaping in a regex
+// Note: .NET doesn't use /pattern/ format, so / is a literal char
+LiteralChars <- [a-zA-Z0-9_ !@#%&:;"'<>,`~=/-]
+
+// Repeat: quantifiers (greedy, non-greedy, possessive)
+// .NET supports possessive quantifiers in some versions, but they're less common
+// For now, we support greedy and non-greedy
+Repeat <- spec:RepeatSpec modifier:RepeatModifier? {
+    r := spec.(*ast.Repeat)
+    if modifier != nil {
+        switch modifier.(string) {
+        case "?":
+            r.Greedy = false
+        case "+":
+            r.Possessive = true
+        }
+    }
+    return r, nil
+}
+
+// RepeatModifier: ? for non-greedy, + for possessive (if supported)
+RepeatModifier <- ( '?' / '+' ) {
+    return string(c.text), nil
+}
+
+// RepeatSpec: the quantifier itself
+RepeatSpec <- '*' {
+    return &ast.Repeat{Min: 0, Max: -1, Greedy: true}, nil
+} / '+' {
+    return &ast.Repeat{Min: 1, Max: -1, Greedy: true}, nil
+} / '?' {
+    return &ast.Repeat{Min: 0, Max: 1, Greedy: true}, nil
+} / '{' min:[0-9]+ ',' max:[0-9]+ '}' {
+    minVal := parseInt(min)
+    maxVal := parseInt(max)
+    return &ast.Repeat{Min: minVal, Max: maxVal, Greedy: true}, nil
+} / '{' min:[0-9]+ ',' '}' {
+    minVal := parseInt(min)
+    return &ast.Repeat{Min: minVal, Max: -1, Greedy: true}, nil
+} / '{' exact:[0-9]+ '}' {
+    val := parseInt(exact)
+    return &ast.Repeat{Min: val, Max: val, Greedy: true}, nil
+}
+
+EOF <- !.

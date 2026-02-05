@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/0x4d5352/regolith/internal/flavor/dotnet"
 	"github.com/0x4d5352/regolith/internal/flavor/java"
 	"github.com/0x4d5352/regolith/internal/flavor/posix_bre"
 	"github.com/0x4d5352/regolith/internal/flavor/posix_ere"
@@ -640,6 +641,177 @@ func TestJavaIntegration(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ast, err := javaFlavor.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			validateSVG(t, svg)
+		})
+	}
+}
+
+// TestDotNetGoldenFiles tests .NET patterns against golden file outputs
+func TestDotNetGoldenFiles(t *testing.T) {
+	goldenDir := "testdata/golden/dotnet"
+
+	// Create golden directory if it doesn't exist
+	if err := os.MkdirAll(goldenDir, 0755); err != nil {
+		t.Fatalf("failed to create golden directory: %v", err)
+	}
+
+	dotnetFlavor := &dotnet.DotNet{}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		// Basic patterns
+		{"literal", "abc"},
+		{"alternation", "a|b|c"},
+		{"charset", "[a-z]"},
+		{"charset-negated", "[^0-9]"},
+
+		// Groups
+		{"group-capture", "(abc)"},
+		{"group-non-capture", "(?:abc)"},
+		{"group-named-angle", "(?<name>abc)"},
+		{"group-named-quote", "(?'name'abc)"},
+		{"group-atomic", "(?>abc)"},
+
+		// Lookahead and lookbehind
+		{"lookahead-positive", "(?=abc)"},
+		{"lookahead-negative", "(?!abc)"},
+		{"lookbehind-positive", "(?<=abc)"},
+		{"lookbehind-negative", "(?<!abc)"},
+
+		// Balanced groups (unique to .NET)
+		{"balanced-capture", "(?<Close-Open>a)"},
+		{"balanced-capture-quote", "(?'Close-Open'a)"},
+		{"balanced-non-capture", "(?<-Open>a)"},
+		{"balanced-non-capture-quote", "(?'-Open'a)"},
+		{"balanced-parens", `\((?:[^()]|(?<O>\()|(?<-O>\)))*\)`},
+
+		// Quantifiers
+		{"quantifier-star", "a*"},
+		{"quantifier-plus", "a+"},
+		{"quantifier-question", "a?"},
+		{"quantifier-exact", "a{3}"},
+		{"quantifier-range", "a{2,5}"},
+
+		// Non-greedy quantifiers
+		{"lazy-star", "a*?"},
+		{"lazy-plus", "a+?"},
+
+		// Escapes
+		{"escape-digit", `\d`},
+		{"escape-word", `\w`},
+		{"escape-whitespace", `\s`},
+		{"escape-vertical-tab", `\v`},
+		{"escape-bell", `\a`},
+		{"escape-char", `\e`},
+
+		// Anchors
+		{"anchor-line", "^start$"},
+		{"anchor-input", `\Astart\z`},
+		{"anchor-word", `\bword\b`},
+
+		// Unicode properties
+		{"unicode-letter", `\p{L}`},
+		{"unicode-upper", `\p{Lu}`},
+		{"unicode-negated", `\P{N}`},
+
+		// Back-references (both syntaxes)
+		{"backref-number", `(a)\1`},
+		{"backref-named-angle", `(?<n>a)\k<n>`},
+		{"backref-named-quote", `(?'n'a)\k'n'`},
+
+		// Quoted literals
+		{"quoted-literal", `\Q[a-z]+\E`},
+		{"quoted-context", `foo\Q***\Ebar`},
+
+		// Comments
+		{"comment", `(?#this is a comment)`},
+		{"comment-context", `foo(?#match foo)bar`},
+
+		// Inline modifiers (.NET: i, m, s, n, x)
+		{"modifier-global", `(?i)abc`},
+		{"modifier-scoped", `(?i:abc)`},
+		{"modifier-enable-disable", `(?i-m)abc`},
+		{"modifier-explicit-capture", `(?n)abc`},
+
+		// Unlimited lookbehind (unique to .NET)
+		{"lookbehind-variable", `(?<=a+)b`},
+		{"lookbehind-alternation", `(?<=ab|abc)x`},
+
+		// Complex patterns
+		{"complex-email", `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`},
+		{"complex-balanced", `(?<Open>\()(?<Close-Open>\))`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := dotnetFlavor.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error for %q: %v", tc.pattern, err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			goldenPath := filepath.Join(goldenDir, tc.name+".svg")
+
+			if os.Getenv("GOLDEN_UPDATE") == "1" {
+				err := os.WriteFile(goldenPath, []byte(svg), 0644)
+				if err != nil {
+					t.Fatalf("failed to write golden file: %v", err)
+				}
+				return
+			}
+
+			expected, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("failed to read golden file %s (run with GOLDEN_UPDATE=1 to create): %v", goldenPath, err)
+			}
+
+			if svg != string(expected) {
+				t.Errorf("SVG output differs from golden file %s", goldenPath)
+				t.Logf("Run with GOLDEN_UPDATE=1 to update golden files")
+			}
+		})
+	}
+}
+
+// TestDotNetIntegration tests complete .NET rendering pipeline
+func TestDotNetIntegration(t *testing.T) {
+	dotnetFlavor := &dotnet.DotNet{}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		{"email", `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`},
+		{"date-named", `(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})`},
+		{"phone", `\d{3}-\d{3}-\d{4}`},
+		{"url", `https?://[a-zA-Z0-9.-]+(?:/[a-zA-Z0-9./-]*)?`},
+		{"quoted-special", `\Q$100.00\E`},
+		{"atomic-greedy", `(?>a+)b`},
+		{"unicode-words", `\p{L}+`},
+		{"modifier-case", `(?i:hello) world`},
+		{"comment-pattern", `\d+(?#digits only)\.\d+`},
+		// .NET unique features
+		{"balanced-simple", `(?<Open>\()(?<Close-Open>\))`},
+		{"named-quote-syntax", `(?'word'\w+)`},
+		{"backref-quote-syntax", `(?'n'a)\k'n'`},
+		{"unlimited-lookbehind", `(?<=\w+)x`},
+		{"explicit-capture-mode", `(?n)(a)(?<named>b)`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := dotnetFlavor.Parse(tc.pattern)
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}

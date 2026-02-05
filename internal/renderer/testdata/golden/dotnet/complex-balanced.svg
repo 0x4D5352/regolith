@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="490" height="78" viewBox="0 0 490 78"><style>
+		.literal rect { fill: #ff6b6b; }
+		.escape rect { fill: #bada55; }
+		.charset rect { fill: #cbcbba; }
+		.anchor rect { fill: #6b6659; }
+		.any-character rect { fill: #dae9e5; }
+		.flags rect { fill: #c8e0f9; }
+		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
+		.comment text { fill: #666; font-style: italic; }
+		text { font-family: monospace; font-size: 14px; fill: #000; }
+		.anchor text { fill: #fff; }
+		.quote { fill: #000; }
+		.subexp-label, .charset-label, .flags-label { font-size: 12px; font-style: italic; }
+		.repeat-label { fill: #666; font-size: 12px; }
+	</style><line x1="5" y1="46" x2="10" y2="46" stroke="#000" stroke-width="2"/><line x1="480" y1="46" x2="485" y2="46" stroke="#000" stroke-width="2"/><g transform="translate(10,10)"><g class="match"><path d="M 146 36 L 156 36" fill="none" stroke="#000" stroke-width="2"/><g class="subexp"><rect x="0" y="0" width="146" height="58" rx="3" ry="3" fill="none" stroke="#908c83" stroke-width="2"/><text x="10" y="14" font-family="monospace" font-size="12" class="subexp-label">group #1 &#39;Open&#39;</text><g transform="translate(55.4,24)"><g class="match"><g class="literal"><rect x="0" y="0" width="35.2" height="24" rx="3" ry="3"/><text x="17.6" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>(</tspan><tspan class="quote">&#34;</tspan></text></g></g></g></g><g transform="translate(156,0)"><g class="subexp"><rect x="0" y="0" width="314" height="58" rx="3" ry="3" fill="none" stroke="#908c83" stroke-width="2"/><text x="10" y="14" font-family="monospace" font-size="12" class="subexp-label">balanced group &#39;Close&#39; (pop &#39;Open&#39;)</text><g transform="translate(139.4,24)"><g class="match"><g class="literal"><rect x="0" y="0" width="35.2" height="24" rx="3" ry="3"/><text x="17.6" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>)</tspan><tspan class="quote">&#34;</tspan></text></g></g></g></g></g></g></g></svg>

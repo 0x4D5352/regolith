@@ -162,6 +162,8 @@ func (r *Renderer) renderNode(node parser.Node) RenderedNode {
 		return r.renderComment(n)
 	case *parser.InlineModifier:
 		return r.renderInlineModifier(n)
+	case *parser.BalancedGroup:
+		return r.renderBalancedGroup(n)
 	default:
 		// Fallback: render as a simple label
 		return r.renderLabel(fmt.Sprintf("<%s>", node.Type()), "unknown")
@@ -482,6 +484,42 @@ func (r *Renderer) renderInlineModifier(im *parser.InlineModifier) RenderedNode 
 
 	// Global modifier - just render as a label
 	return r.renderLabel(label, "flags")
+}
+
+// renderBalancedGroup renders a .NET balanced group (?<name-other>...) or (?<-other>...)
+func (r *Renderer) renderBalancedGroup(bg *parser.BalancedGroup) RenderedNode {
+	// Build the label based on whether it's capturing or non-capturing
+	var label string
+	if bg.Name != "" {
+		// Capturing balanced group: (?<name-other>...)
+		label = fmt.Sprintf("balanced group '%s' (pop '%s')", bg.Name, bg.OtherName)
+	} else {
+		// Non-capturing balanced group: (?<-other>...)
+		label = fmt.Sprintf("balance (pop '%s')", bg.OtherName)
+	}
+
+	// Increment depth before rendering nested content
+	r.subexpDepth++
+
+	// Render the contained regexp
+	content := r.renderRegexp(bg.Regexp)
+
+	// Decrement depth after rendering
+	r.subexpDepth--
+
+	// Determine fill color based on depth (same logic as subexp)
+	currentDepth := r.subexpDepth
+	var fill string
+	if currentDepth == 0 {
+		fill = r.Config.SubexpFill
+	} else if len(r.Config.SubexpColors) > 0 {
+		colorIndex := (currentDepth - 1) % len(r.Config.SubexpColors)
+		fill = r.Config.SubexpColors[colorIndex]
+	} else {
+		fill = r.Config.SubexpFill
+	}
+
+	return r.renderSubexpBox(label, content, fill)
 }
 
 // renderMatch renders a sequence of fragments
