@@ -1,0 +1,258 @@
+{
+package gnugrep_bre
+
+import (
+    "fmt"
+
+    "github.com/0x4d5352/regolith/internal/ast"
+)
+
+// parserState returns the parser state from the global state map
+func parserState(c *current) *ast.ParserState {
+    return c.globalStore["state"].(*ast.ParserState)
+}
+}
+
+// Entry point - GNU BRE has no delimiters or flags, just a plain pattern
+// GNU BRE supports alternation via \|
+Root <- regexp:Regexp EOF {
+    return regexp.(*ast.Regexp), nil
+}
+
+// Regexp in GNU BRE supports alternation with \|
+Regexp <- first:Match rest:( '\\' '|' Match )* {
+    matches := []*ast.Match{first.(*ast.Match)}
+    if rest != nil {
+        for _, r := range rest.([]any) {
+            pair := r.([]any)
+            matches = append(matches, pair[2].(*ast.Match))
+        }
+    }
+    return &ast.Regexp{Matches: matches}, nil
+}
+
+// Match is a sequence of fragments
+Match <- frags:MatchFragment* {
+    fragments := []*ast.MatchFragment{}
+    if frags != nil {
+        for _, f := range frags.([]any) {
+            fragments = append(fragments, f.(*ast.MatchFragment))
+        }
+    }
+    return &ast.Match{Fragments: fragments}, nil
+}
+
+// MatchFragment is content with optional repeat
+// Use negative lookahead to stop at \) which closes a group, and \| which is alternation
+MatchFragment <- !('\\' ')') !('\\' '|') content:Content repeat:Repeat? {
+    mf := &ast.MatchFragment{Content: content.(ast.Node)}
+    if repeat != nil {
+        mf.Repeat = repeat.(*ast.Repeat)
+    }
+    return mf, nil
+}
+
+// Content is what can appear in a match fragment
+Content <- Anchor / Subexp / Charset / BackReference / Terminal
+
+// Anchor: ^ or $ in GNU BRE (same as POSIX)
+Anchor <- ( '^' / '$' ) {
+    anchorType := "start"
+    if string(c.text) == "$" {
+        anchorType = "end"
+    }
+    return &ast.Anchor{AnchorType: anchorType}, nil
+}
+
+// Subexp: \( ... \) in GNU BRE (same as POSIX BRE)
+Subexp <- '\\' '(' regexp:Regexp '\\' ')' {
+    s := &ast.Subexp{
+        GroupType: "capture",
+        Number:    parserState(c).NextGroupNumber(),
+        Regexp:    regexp.(*ast.Regexp),
+    }
+    return s, nil
+}
+
+// BackReference: \1 through \9 (GNU BRE supports back-references)
+BackReference <- '\\' num:[1-9] {
+    n := int(num.([]byte)[0] - '0')
+    return &ast.BackReference{Number: n}, nil
+}
+
+// Charset: [...] or [^...]
+// GNU BRE supports POSIX character classes like [[:alpha:]]
+Charset <- '[' inverted:'^'? items:CharsetItem* ']' {
+    charset := &ast.Charset{
+        Inverted: inverted != nil,
+        Items:    []ast.CharsetItem{},
+    }
+    if items != nil {
+        for _, item := range items.([]any) {
+            charset.Items = append(charset.Items, item.(ast.CharsetItem))
+        }
+    }
+    return charset, nil
+}
+
+// CharsetItem: POSIX class, range, or single character
+// Order matters: try POSIX class first, then range, then single char
+CharsetItem <- POSIXClass / CharsetRange / CharsetEscape / CharsetLiteral
+
+// POSIXClass: [:classname:] inside a bracket expression
+POSIXClass <- "[:" name:POSIXClassName ":]" {
+    return &ast.POSIXClass{Name: name.(string), Negated: false}, nil
+} / "[:^" name:POSIXClassName ":]" {
+    // Some implementations support negated POSIX classes [:^alpha:]
+    return &ast.POSIXClass{Name: name.(string), Negated: true}, nil
+}
+
+// POSIXClassName: valid POSIX class names
+POSIXClassName <- "alnum" { return "alnum", nil }
+              / "alpha" { return "alpha", nil }
+              / "blank" { return "blank", nil }
+              / "cntrl" { return "cntrl", nil }
+              / "digit" { return "digit", nil }
+              / "graph" { return "graph", nil }
+              / "lower" { return "lower", nil }
+              / "print" { return "print", nil }
+              / "punct" { return "punct", nil }
+              / "space" { return "space", nil }
+              / "upper" { return "upper", nil }
+              / "xdigit" { return "xdigit", nil }
+
+// CharsetRange: a-z
+CharsetRange <- first:CharsetRangeBound '-' last:CharsetRangeBound {
+    return &ast.CharsetRange{
+        First: first.(string),
+        Last:  last.(string),
+    }, nil
+}
+
+// CharsetRangeBound: what can be a range endpoint
+CharsetRangeBound <- CharsetRangeEscape / CharsetRangeLiteral
+
+// CharsetRangeEscape: escaped char that can be a range bound
+// In GNU BRE, metacharacters that can be escaped
+CharsetRangeEscape <- '\\' char:SpecialChar {
+    return string(char.([]byte)), nil
+}
+
+// SpecialChar: characters that can be escaped to become literal
+// In BRE: . * [ ] \ ^ $
+SpecialChar <- '.' / '*' / '[' / ']' / '\\' / '^' / '$'
+
+// CharsetRangeLiteral: literal char in a range context (not - or ] or \)
+CharsetRangeLiteral <- [^-\]\\] {
+    return string(c.text), nil
+}
+
+// CharsetEscape: escape sequence in charset
+CharsetEscape <- '\\' char:SpecialChar {
+    return &ast.CharsetLiteral{Text: string(char.([]byte))}, nil
+}
+
+// CharsetLiteral: literal character in charset
+CharsetLiteral <- [^\]\\] {
+    return &ast.CharsetLiteral{Text: string(c.text)}, nil
+} / '\\' char:. {
+    // Unknown escape in charset - treat as literal (be lenient)
+    return &ast.CharsetLiteral{Text: string(char.([]byte))}, nil
+}
+
+// Terminal: what can appear outside groups/charsets
+Terminal <- AnyChar / Escape / Literal
+
+// AnyChar: the . metacharacter (special without backslash in BRE)
+AnyChar <- '.' {
+    return &ast.AnyCharacter{}, nil
+}
+
+// Escape: escape sequences in GNU BRE
+// GNU extensions: \b, \B, \<, \>, \w, \W, \s, \S
+// Also: \] and \} to match literal ] and }
+Escape <- '\\' '<' {
+    // Word start anchor (GNU extension)
+    return &ast.Anchor{AnchorType: "word_start"}, nil
+} / '\\' '>' {
+    // Word end anchor (GNU extension)
+    return &ast.Anchor{AnchorType: "word_end"}, nil
+} / '\\' 'b' {
+    // Word boundary (GNU extension)
+    return &ast.Anchor{AnchorType: "word_boundary"}, nil
+} / '\\' 'B' {
+    // Non-word boundary (GNU extension)
+    return &ast.Anchor{AnchorType: "non_word_boundary"}, nil
+} / '\\' 'w' {
+    // Word character (GNU extension) - synonym for [_[:alnum:]]
+    return &ast.Escape{EscapeType: "word", Code: "w", Value: "word character"}, nil
+} / '\\' 'W' {
+    // Non-word character (GNU extension) - synonym for [^_[:alnum:]]
+    return &ast.Escape{EscapeType: "non_word", Code: "W", Value: "non-word character"}, nil
+} / '\\' 's' {
+    // Whitespace (GNU extension) - synonym for [[:space:]]
+    return &ast.Escape{EscapeType: "whitespace", Code: "s", Value: "whitespace"}, nil
+} / '\\' 'S' {
+    // Non-whitespace (GNU extension) - synonym for [^[:space:]]
+    return &ast.Escape{EscapeType: "non_whitespace", Code: "S", Value: "non-whitespace"}, nil
+} / '\\' ']' {
+    // Literal ] (GNU extension)
+    return &ast.Literal{Text: "]"}, nil
+} / '\\' '}' {
+    // Literal } (GNU extension)
+    return &ast.Literal{Text: "}"}, nil
+} / '\\' char:SpecialChar {
+    // Escaped special character becomes literal
+    return &ast.Literal{Text: string(char.([]byte))}, nil
+} / '\\' ')' {
+    // \) outside of a group is an error
+    return nil, fmt.Errorf("\\) without matching \\( - unbalanced group")
+}
+
+// Literal: regular characters (not metacharacters)
+// In BRE, ( ) { } + ? | are LITERAL (not special) without backslash
+Literal <- LiteralChars+ {
+    return &ast.Literal{Text: string(c.text)}, nil
+} / '\\' char:. {
+    // Unknown escape - undefined behavior per GNU docs, treat as literal
+    return &ast.Literal{Text: string(char.([]byte))}, nil
+}
+
+// LiteralChars: characters that don't need escaping in GNU BRE
+// In BRE, metacharacters are: . [ \ ^ $ *
+// Everything else (including ( ) { } + ? |) is literal!
+LiteralChars <- [a-zA-Z0-9_ !@#%&:;"'<>,`~=/-] / [+?|(){}]
+
+// Repeat: quantifiers
+// In GNU BRE: * (unescaped), \+ (one-or-more), \? (zero-or-one), \{n,m\} (interval)
+Repeat <- spec:RepeatSpec {
+    return spec.(*ast.Repeat), nil
+}
+
+// RepeatSpec: the quantifier itself
+// GNU BRE quantifiers are always greedy (no non-greedy modifier)
+RepeatSpec <- '*' {
+    return &ast.Repeat{Min: 0, Max: -1, Greedy: true}, nil
+} / '\\' '+' {
+    // GNU extension: \+ means one or more
+    return &ast.Repeat{Min: 1, Max: -1, Greedy: true}, nil
+} / '\\' '?' {
+    // GNU extension: \? means zero or one
+    return &ast.Repeat{Min: 0, Max: 1, Greedy: true}, nil
+} / '\\' '{' ',' max:[0-9]+ '\\' '}' {
+    // GNU extension: \{,m\} means at most m
+    maxVal := parseInt(max)
+    return &ast.Repeat{Min: 0, Max: maxVal, Greedy: true}, nil
+} / '\\' '{' min:[0-9]+ ',' max:[0-9]+ '\\' '}' {
+    minVal := parseInt(min)
+    maxVal := parseInt(max)
+    return &ast.Repeat{Min: minVal, Max: maxVal, Greedy: true}, nil
+} / '\\' '{' min:[0-9]+ ',' '\\' '}' {
+    minVal := parseInt(min)
+    return &ast.Repeat{Min: minVal, Max: -1, Greedy: true}, nil
+} / '\\' '{' exact:[0-9]+ '\\' '}' {
+    val := parseInt(exact)
+    return &ast.Repeat{Min: val, Max: val, Greedy: true}, nil
+}
+
+EOF <- !.

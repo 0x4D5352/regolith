@@ -26,7 +26,7 @@ coverage:
 
 # Generate all parsers from grammars
 .PHONY: generate
-generate: generate-javascript generate-posix-ere generate-posix-bre
+generate: generate-javascript generate-posix-ere generate-posix-bre generate-gnugrep-bre generate-gnugrep-ere
 
 # Generate JavaScript parser
 .PHONY: generate-javascript
@@ -42,6 +42,16 @@ generate-posix-ere: $(PIGEON)
 .PHONY: generate-posix-bre
 generate-posix-bre: $(PIGEON)
 	$(PIGEON) -o internal/flavor/posix_bre/parser.go internal/flavor/posix_bre/grammar.peg
+
+# Generate GNU grep BRE parser
+.PHONY: generate-gnugrep-bre
+generate-gnugrep-bre: $(PIGEON)
+	$(PIGEON) -o internal/flavor/gnugrep_bre/parser.go internal/flavor/gnugrep_bre/grammar.peg
+
+# Generate GNU grep ERE parser
+.PHONY: generate-gnugrep-ere
+generate-gnugrep-ere: $(PIGEON)
+	$(PIGEON) -o internal/flavor/gnugrep_ere/parser.go internal/flavor/gnugrep_ere/grammar.peg
 
 # Install pigeon if needed
 $(PIGEON):

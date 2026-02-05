@@ -349,7 +349,7 @@ func (r *Renderer) renderEscape(esc *parser.Escape) RenderedNode {
 	return r.renderLabel(esc.Value, "escape")
 }
 
-// renderAnchor renders an anchor (^, $, \b, \B)
+// renderAnchor renders an anchor (^, $, \b, \B, \<, \>)
 func (r *Renderer) renderAnchor(anchor *parser.Anchor) RenderedNode {
 	var label string
 	switch anchor.AnchorType {
@@ -361,6 +361,10 @@ func (r *Renderer) renderAnchor(anchor *parser.Anchor) RenderedNode {
 		label = "Word boundary"
 	case "non_word_boundary":
 		label = "Non-word boundary"
+	case "word_start":
+		label = "Start of word"
+	case "word_end":
+		label = "End of word"
 	default:
 		label = anchor.AnchorType
 	}
