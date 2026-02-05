@@ -5,6 +5,8 @@
 		.anchor rect { fill: #6b6659; }
 		.any-character rect { fill: #dae9e5; }
 		.flags rect { fill: #c8e0f9; }
+		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
+		.comment text { fill: #666; font-style: italic; }
 		text { font-family: monospace; font-size: 14px; fill: #000; }
 		.anchor text { fill: #fff; }
 		.quote { fill: #000; }

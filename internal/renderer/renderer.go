@@ -108,6 +108,8 @@ func (r *Renderer) getStyles() string {
 		.anchor rect { fill: %s; }
 		.any-character rect { fill: %s; }
 		.flags rect { fill: %s; }
+		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
+		.comment text { fill: #666; font-style: italic; }
 		text { font-family: %s; font-size: %gpx; fill: %s; }
 		.anchor text { fill: #fff; }
 		.quote { fill: #000; }
@@ -154,6 +156,12 @@ func (r *Renderer) renderNode(node parser.Node) RenderedNode {
 		return r.renderBackReference(n)
 	case *parser.UnicodePropertyEscape:
 		return r.renderUnicodePropertyEscape(n)
+	case *parser.QuotedLiteral:
+		return r.renderQuotedLiteral(n)
+	case *parser.Comment:
+		return r.renderComment(n)
+	case *parser.InlineModifier:
+		return r.renderInlineModifier(n)
 	default:
 		// Fallback: render as a simple label
 		return r.renderLabel(fmt.Sprintf("<%s>", node.Type()), "unknown")
@@ -349,7 +357,7 @@ func (r *Renderer) renderEscape(esc *parser.Escape) RenderedNode {
 	return r.renderLabel(esc.Value, "escape")
 }
 
-// renderAnchor renders an anchor (^, $, \b, \B, \<, \>)
+// renderAnchor renders an anchor (^, $, \b, \B, \<, \>, \A, \Z, \z, \G)
 func (r *Renderer) renderAnchor(anchor *parser.Anchor) RenderedNode {
 	var label string
 	switch anchor.AnchorType {
@@ -365,6 +373,14 @@ func (r *Renderer) renderAnchor(anchor *parser.Anchor) RenderedNode {
 		label = "Start of word"
 	case "word_end":
 		label = "End of word"
+	case "string_start":
+		label = "Start of input"
+	case "string_end":
+		label = "End of input"
+	case "absolute_end":
+		label = "Absolute end"
+	case "end_of_previous_match":
+		label = "End of previous match"
 	default:
 		label = anchor.AnchorType
 	}
@@ -396,6 +412,76 @@ func (r *Renderer) renderUnicodePropertyEscape(upe *parser.UnicodePropertyEscape
 		label = fmt.Sprintf("Unicode %s", upe.Property)
 	}
 	return r.renderLabel(label, "escape")
+}
+
+// renderQuotedLiteral renders a \Q...\E quoted literal sequence
+func (r *Renderer) renderQuotedLiteral(ql *parser.QuotedLiteral) RenderedNode {
+	return r.renderQuotedLabel(ql.Text, "literal")
+}
+
+// renderComment renders a (?#...) inline comment
+func (r *Renderer) renderComment(comment *parser.Comment) RenderedNode {
+	cfg := r.Config
+	text := "# " + comment.Text
+	textWidth := MeasureText(text, cfg)
+	padding := cfg.Padding / 2
+
+	width := textWidth + 2*padding
+	height := cfg.FontSize + 2*padding
+
+	rect := &Rect{
+		X:      0,
+		Y:      0,
+		Width:  width,
+		Height: height,
+		Rx:     cfg.CornerRadius,
+		Ry:     cfg.CornerRadius,
+	}
+
+	textElem := &Text{
+		X:          width / 2,
+		Y:          height/2 + cfg.FontSize/3,
+		Content:    text,
+		FontFamily: cfg.FontFamily,
+		FontSize:   cfg.FontSize - 2, // Slightly smaller for comments
+		Anchor:     "middle",
+		Class:      "comment-text",
+	}
+
+	group := &Group{
+		Class:    "comment",
+		Children: []SVGElement{rect, textElem},
+	}
+
+	return RenderedNode{
+		Element: group,
+		BBox:    NewBoundingBox(0, 0, width, height),
+	}
+}
+
+// renderInlineModifier renders inline flag modifiers like (?i) or (?i:...)
+func (r *Renderer) renderInlineModifier(im *parser.InlineModifier) RenderedNode {
+	// Build the modifier label
+	var label string
+	if im.Enable != "" && im.Disable != "" {
+		label = fmt.Sprintf("flags: +%s -%s", im.Enable, im.Disable)
+	} else if im.Enable != "" {
+		label = fmt.Sprintf("flags: +%s", im.Enable)
+	} else if im.Disable != "" {
+		label = fmt.Sprintf("flags: -%s", im.Disable)
+	} else {
+		label = "flags"
+	}
+
+	// If scoped (has Regexp), render as a group with the content
+	if im.Regexp != nil {
+		// Render the contained regexp
+		content := r.renderRegexp(im.Regexp)
+		return r.renderLabeledBoxWithContent(label, content, "flags")
+	}
+
+	// Global modifier - just render as a label
+	return r.renderLabel(label, "flags")
 }
 
 // renderMatch renders a sequence of fragments
@@ -623,22 +709,33 @@ func (r *Renderer) renderWithRepeat(content RenderedNode, repeat *parser.Repeat)
 
 // getRepeatLabel returns the label for a repeat quantifier
 func (r *Renderer) getRepeatLabel(repeat *parser.Repeat) string {
+	var label string
 	if repeat.Min == repeat.Max {
 		if repeat.Min == 1 {
-			return ""
+			label = ""
+		} else {
+			label = fmt.Sprintf("%d times", repeat.Min)
 		}
-		return fmt.Sprintf("%d times", repeat.Min)
-	}
-	if repeat.Max == -1 {
+	} else if repeat.Max == -1 {
 		if repeat.Min == 0 {
-			return "" // * quantifier - no label needed
+			label = "" // * quantifier - no label needed
+		} else if repeat.Min == 1 {
+			label = "" // + quantifier - no label needed
+		} else {
+			label = fmt.Sprintf("%d+ times", repeat.Min)
 		}
-		if repeat.Min == 1 {
-			return "" // + quantifier - no label needed
-		}
-		return fmt.Sprintf("%d+ times", repeat.Min)
+	} else {
+		label = fmt.Sprintf("%d to %d times", repeat.Min, repeat.Max)
 	}
-	return fmt.Sprintf("%d to %d times", repeat.Min, repeat.Max)
+
+	// Add possessive indicator
+	if repeat.Possessive && label != "" {
+		label += " (possessive)"
+	} else if repeat.Possessive {
+		label = "possessive"
+	}
+
+	return label
 }
 
 // renderRegexp renders alternation
@@ -824,6 +921,8 @@ func (r *Renderer) renderSubexp(subexp *parser.Subexp) RenderedNode {
 		label = "positive lookbehind"
 	case "negative_lookbehind":
 		label = "negative lookbehind"
+	case "atomic":
+		label = "atomic group"
 	default:
 		label = subexp.GroupType
 	}
