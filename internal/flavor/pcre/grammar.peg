@@ -1,0 +1,636 @@
+{
+package pcre
+
+import "github.com/0x4d5352/regolith/internal/ast"
+
+// parserState returns the parser state from the global state map
+func parserState(c *current) *ast.ParserState {
+    return c.globalStore["state"].(*ast.ParserState)
+}
+}
+
+// Entry point - PCRE patterns are plain strings (no /pattern/flags format)
+Root <- regexp:Regexp EOF {
+    return regexp.(*ast.Regexp), nil
+}
+
+// Regexp is alternation of matches separated by |
+Regexp <- first:Match rest:( '|' Match )* {
+    matches := []*ast.Match{first.(*ast.Match)}
+    if rest != nil {
+        for _, r := range rest.([]any) {
+            pair := r.([]any)
+            matches = append(matches, pair[1].(*ast.Match))
+        }
+    }
+    return &ast.Regexp{Matches: matches}, nil
+}
+
+// Match is a sequence of fragments
+Match <- frags:MatchFragment* {
+    fragments := []*ast.MatchFragment{}
+    if frags != nil {
+        for _, f := range frags.([]any) {
+            fragments = append(fragments, f.(*ast.MatchFragment))
+        }
+    }
+    return &ast.Match{Fragments: fragments}, nil
+}
+
+// MatchFragment is content with optional repeat
+MatchFragment <- content:Content repeat:Repeat? {
+    mf := &ast.MatchFragment{Content: content.(ast.Node)}
+    if repeat != nil {
+        mf.Repeat = repeat.(*ast.Repeat)
+    }
+    return mf, nil
+}
+
+// Content is what can appear in a match fragment
+// Order matters for PEG disambiguation:
+// 1. BacktrackControl (*...) must come early
+// 2. Comment (?#...) must come before other groups
+// 3. InlineModifier (?flags...) must come before Subexp
+// 4. Conditional (?(...)...) must come before Subexp
+// 5. RecursiveRef (?R), (?n), (?&name) must come before Subexp
+// 6. BranchReset (?|...) must come before Subexp
+// 7. Subexp handles remaining group types
+Content <- Anchor / BacktrackControl / Comment / InlineModifier / Conditional / RecursiveRef / BranchReset / Subexp / Charset / Terminal
+
+// =============================================================================
+// BACKTRACKING CONTROL VERBS
+// =============================================================================
+
+// BacktrackControl: (*VERB) or (*VERB:ARG)
+// Verbs: ACCEPT, FAIL, F, MARK, COMMIT, PRUNE, SKIP, THEN
+BacktrackControl <- "(*" verb:BacktrackVerb arg:BacktrackArg? ')' {
+    bc := &ast.BacktrackControl{Verb: verb.(string)}
+    if arg != nil {
+        bc.Arg = arg.(string)
+    }
+    return bc, nil
+}
+
+// BacktrackVerb: the verb name (case-insensitive in PCRE but we match common forms)
+BacktrackVerb <- "ACCEPT" { return "ACCEPT", nil }
+             / "FAIL" { return "FAIL", nil }
+             / "F" { return "FAIL", nil }
+             / "MARK" { return "MARK", nil }
+             / "COMMIT" { return "COMMIT", nil }
+             / "PRUNE" { return "PRUNE", nil }
+             / "SKIP" { return "SKIP", nil }
+             / "THEN" { return "THEN", nil }
+
+// BacktrackArg: optional :NAME argument
+BacktrackArg <- ':' name:BacktrackName {
+    return name.(string), nil
+}
+
+// BacktrackName: the name for (*MARK:NAME), (*SKIP:NAME), etc.
+BacktrackName <- [A-Za-z_][A-Za-z0-9_]* {
+    return string(c.text), nil
+}
+
+// =============================================================================
+// COMMENTS
+// =============================================================================
+
+// Comment: (?#...) - inline comment, matches nothing
+Comment <- "(?#" text:CommentText ')' {
+    return &ast.Comment{Text: text.(string)}, nil
+}
+
+// CommentText: everything until the closing )
+CommentText <- [^)]* {
+    return string(c.text), nil
+}
+
+// =============================================================================
+// INLINE MODIFIERS
+// =============================================================================
+
+// InlineModifier: (?flags), (?-flags), (?flags-flags), or scoped (?flags:X)
+// PCRE flags: i, m, s, x, J, U, n (and more)
+// Note: Must try scoped versions before global versions
+InlineModifier <- "(?" enable:ModifierFlags? '-' disable:ModifierFlags ':' regexp:Regexp ')' {
+    // Scoped modifier with both enable and disable: (?i-m:X)
+    enableStr := ""
+    if enable != nil {
+        enableStr = enable.(string)
+    }
+    return &ast.InlineModifier{
+        Enable:  enableStr,
+        Disable: disable.(string),
+        Regexp:  regexp.(*ast.Regexp),
+    }, nil
+} / "(?" enable:ModifierFlags ':' regexp:Regexp ')' {
+    // Scoped modifier with enable only: (?i:X)
+    return &ast.InlineModifier{
+        Enable: enable.(string),
+        Regexp: regexp.(*ast.Regexp),
+    }, nil
+} / "(?" enable:ModifierFlags? '-' disable:ModifierFlags ')' {
+    // Global modifier with both enable and disable: (?i-m) or (?-m)
+    enableStr := ""
+    if enable != nil {
+        enableStr = enable.(string)
+    }
+    return &ast.InlineModifier{
+        Enable:  enableStr,
+        Disable: disable.(string),
+    }, nil
+} / "(?" enable:ModifierFlags ')' {
+    // Global modifier with enable only: (?i)
+    return &ast.InlineModifier{
+        Enable: enable.(string),
+    }, nil
+}
+
+// ModifierFlags: one or more PCRE flags (must not start with patterns that look like groups)
+// Excludes: R, P, <, ', &, |, :, >, =, !, 0-9, - at start
+ModifierFlags <- [imsxJUn]+ {
+    return string(c.text), nil
+}
+
+// =============================================================================
+// CONDITIONAL PATTERNS
+// =============================================================================
+
+// Conditional: (?(condition)yes-pattern|no-pattern) or (?(condition)yes-pattern)
+Conditional <- "(?" cond:Condition yes:Regexp no:('|' Regexp)? ')' {
+    condNode := &ast.Conditional{
+        Condition: cond.(ast.Node),
+        TrueMatch: yes.(*ast.Regexp),
+    }
+    if no != nil {
+        pair := no.([]any)
+        condNode.FalseMatch = pair[1].(*ast.Regexp)
+    }
+    return condNode, nil
+}
+
+// Condition: what to test
+// Must come in order of specificity
+Condition <- '(' cond:ConditionInner ')' {
+    return cond, nil
+}
+
+// ConditionInner: the actual condition content
+ConditionInner <- "DEFINE" {
+    // (?(DEFINE)...) - define patterns without matching
+    return &ast.Literal{Text: "DEFINE"}, nil
+} / "R&" name:GroupName {
+    // (?(R&name)...) - test recursion to named group
+    return &ast.RecursiveRef{Target: "R&" + name.(string)}, nil
+} / "R" num:[0-9]+ {
+    // (?(Rn)...) - test recursion to group n
+    return &ast.RecursiveRef{Target: "R" + getString(num)}, nil
+} / "R" {
+    // (?(R)...) - test if in any recursion
+    return &ast.RecursiveRef{Target: "R"}, nil
+} / '<' name:GroupName '>' {
+    // (?(<name>)...) - test if named group matched
+    return &ast.BackReference{Name: name.(string)}, nil
+} / "'" name:GroupName "'" {
+    // (?('name')...) - test if named group matched (alternative syntax)
+    return &ast.BackReference{Name: name.(string)}, nil
+} / num:[0-9]+ {
+    // (?(n)...) - test if group n matched
+    return &ast.BackReference{Number: parseInt(num)}, nil
+} / '+' num:[0-9]+ {
+    // (?(+n)...) - relative forward group
+    return &ast.BackReference{Number: parseInt(num)}, nil
+} / '-' num:[0-9]+ {
+    // (?(-n)...) - relative backward group
+    return &ast.BackReference{Number: -parseInt(num)}, nil
+} / name:GroupName {
+    // (?(name)...) - test if named group matched
+    return &ast.BackReference{Name: name.(string)}, nil
+} / assertion:LookaroundAssertion {
+    // Assertion as condition
+    return assertion, nil
+}
+
+// LookaroundAssertion: lookahead/lookbehind as condition
+LookaroundAssertion <- "?=" regexp:Regexp {
+    return &ast.Subexp{GroupType: "positive_lookahead", Regexp: regexp.(*ast.Regexp)}, nil
+} / "?!" regexp:Regexp {
+    return &ast.Subexp{GroupType: "negative_lookahead", Regexp: regexp.(*ast.Regexp)}, nil
+} / "?<=" regexp:Regexp {
+    return &ast.Subexp{GroupType: "positive_lookbehind", Regexp: regexp.(*ast.Regexp)}, nil
+} / "?<!" regexp:Regexp {
+    return &ast.Subexp{GroupType: "negative_lookbehind", Regexp: regexp.(*ast.Regexp)}, nil
+}
+
+// =============================================================================
+// RECURSIVE PATTERNS
+// =============================================================================
+
+// RecursiveRef: recursive pattern references
+// (?R) - recurse entire pattern
+// (?0) - same as (?R)
+// (?n) - call subpattern by number (but NOT if followed by yes|no for conditional)
+// (?+n) - relative forward
+// (?-n) - relative backward
+// (?&name) - call by name (Perl)
+// (?P>name) - call by name (Python)
+// \g<n>, \g'n' - Oniguruma style (handled in Escape)
+RecursiveRef <- "(?R)" {
+    return &ast.RecursiveRef{Target: "R"}, nil
+} / "(?0)" {
+    return &ast.RecursiveRef{Target: "0"}, nil
+} / "(?P>" name:GroupName ')' {
+    // Python style: (?P>name)
+    return &ast.RecursiveRef{Target: name.(string)}, nil
+} / "(?&" name:GroupName ')' {
+    // Perl style: (?&name)
+    return &ast.RecursiveRef{Target: name.(string)}, nil
+} / "(?" sign:[+-] num:[0-9]+ ')' {
+    // Relative: (?+n) or (?-n)
+    return &ast.RecursiveRef{Target: string(sign.([]byte)) + getString(num)}, nil
+} / "(?" num:[1-9][0-9]* ')' {
+    // Absolute: (?n) - recurse to numbered group
+    return &ast.RecursiveRef{Target: getString(num)}, nil
+}
+
+// =============================================================================
+// BRANCH RESET
+// =============================================================================
+
+// BranchReset: (?|...) - reset group numbers in each alternative
+BranchReset <- "(?|" regexp:Regexp ')' {
+    return &ast.BranchReset{Regexp: regexp.(*ast.Regexp)}, nil
+}
+
+// =============================================================================
+// SUBEXPRESSIONS (GROUPS)
+// =============================================================================
+
+// Subexp: groups with optional type marker
+// PCRE supports: (), (?:), (?=), (?!), (?<=), (?<!), (?<name>), (?'name'), (?P<name>), (?>)
+// Also alternative syntax: (*atomic:...), (*pla:...), etc.
+Subexp <- "(*atomic:" regexp:Regexp ')' {
+    // Alternative atomic syntax
+    return &ast.Subexp{GroupType: "atomic", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*positive_lookahead:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "positive_lookahead", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*pla:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "positive_lookahead", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*negative_lookahead:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "negative_lookahead", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*nla:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "negative_lookahead", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*positive_lookbehind:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "positive_lookbehind", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*plb:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "positive_lookbehind", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*negative_lookbehind:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "negative_lookbehind", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*nlb:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "negative_lookbehind", Regexp: regexp.(*ast.Regexp)}, nil
+} / '(' groupType:GroupType? regexp:Regexp ')' {
+    s := &ast.Subexp{Regexp: regexp.(*ast.Regexp)}
+    if groupType != nil {
+        switch gt := groupType.(type) {
+        case string:
+            // Simple group type (non_capture, lookahead, lookbehind, atomic)
+            s.GroupType = gt
+            s.Number = 0
+        case map[string]any:
+            // Named capture group
+            s.GroupType = gt["type"].(string)
+            s.Name = gt["name"].(string)
+            s.Number = parserState(c).NextGroupNumber()
+        }
+    } else {
+        s.GroupType = "capture"
+        s.Number = parserState(c).NextGroupNumber()
+    }
+    return s, nil
+}
+
+// GroupType: (?:, (?=, (?!, (?<=, (?<!, (?<name>, (?'name', (?P<name>, (?>
+// Order matters: more specific patterns first
+GroupType <- "?>" { return "atomic", nil }
+          / "?:" { return "non_capture", nil }
+          / "?=" { return "positive_lookahead", nil }
+          / "?!" { return "negative_lookahead", nil }
+          / "?<=" { return "positive_lookbehind", nil }
+          / "?<!" { return "negative_lookbehind", nil }
+          / "?P<" name:GroupName ">" {
+              // Python style: (?P<name>...)
+              return map[string]any{"type": "named_capture", "name": name.(string)}, nil
+          }
+          / "?<" name:GroupName ">" {
+              // Perl style: (?<name>...)
+              return map[string]any{"type": "named_capture", "name": name.(string)}, nil
+          }
+          / "?'" name:GroupName "'" {
+              // Alternative Perl style: (?'name'...)
+              return map[string]any{"type": "named_capture", "name": name.(string)}, nil
+          }
+
+// GroupName: valid identifier for group names
+GroupName <- [a-zA-Z_][a-zA-Z0-9_]* {
+    return string(c.text), nil
+}
+
+// =============================================================================
+// ANCHORS
+// =============================================================================
+
+// Anchor: ^ or $
+Anchor <- ( '^' / '$' ) {
+    anchorType := "start"
+    if string(c.text) == "$" {
+        anchorType = "end"
+    }
+    return &ast.Anchor{AnchorType: anchorType}, nil
+}
+
+// =============================================================================
+// CHARACTER SETS
+// =============================================================================
+
+// Charset: [...] or [^...]
+Charset <- '[' inverted:'^'? items:CharsetItem* ']' {
+    charset := &ast.Charset{
+        Inverted: inverted != nil,
+        Items:    []ast.CharsetItem{},
+    }
+    if items != nil {
+        for _, item := range items.([]any) {
+            charset.Items = append(charset.Items, item.(ast.CharsetItem))
+        }
+    }
+    return charset, nil
+}
+
+// CharsetItem: POSIX class, range, or single character/escape
+CharsetItem <- POSIXClass / CharsetRange / CharsetEscape / CharsetLiteral
+
+// POSIXClass: [:alpha:], [:^digit:] etc. (within a charset context)
+// Note: The outer brackets of [[:alpha:]] are handled by Charset rule
+POSIXClass <- "[:" negated:'^'? name:POSIXClassName ":]" {
+    return &ast.POSIXClass{
+        Name:    name.(string),
+        Negated: negated != nil,
+    }, nil
+}
+
+// POSIXClassName: standard POSIX class names
+POSIXClassName <- ( "alnum" / "alpha" / "ascii" / "blank" / "cntrl" / "digit" /
+                    "graph" / "lower" / "print" / "punct" / "space" / "upper" /
+                    "word" / "xdigit" ) {
+    return string(c.text), nil
+}
+
+// CharsetRange: a-z
+CharsetRange <- first:CharsetRangeBound '-' last:CharsetRangeBound {
+    return &ast.CharsetRange{
+        First: first.(string),
+        Last:  last.(string),
+    }, nil
+}
+
+// CharsetRangeBound: what can be a range endpoint
+CharsetRangeBound <- CharsetRangeEscape / CharsetRangeLiteral
+
+// CharsetRangeEscape: escaped char that can be a range bound
+CharsetRangeEscape <- '\\' [bfnrtaev] {
+    return string(c.text), nil
+} / '\\' 'x' [0-9a-fA-F] [0-9a-fA-F] {
+    return string(c.text), nil
+} / '\\' 'x' '{' [0-9a-fA-F]+ '}' {
+    return string(c.text), nil
+} / '\\' 'o' '{' [0-7]+ '}' {
+    // PCRE octal: \o{ddd}
+    return string(c.text), nil
+} / '\\' 'u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] {
+    return string(c.text), nil
+} / '\\' '0' [0-7]* {
+    return string(c.text), nil
+} / '\\' 'c' [a-zA-Z] {
+    return string(c.text), nil
+}
+
+// CharsetRangeLiteral: literal char in a range context (not - or ] or \)
+CharsetRangeLiteral <- [^-\]\\] {
+    return string(c.text), nil
+} / '\\' . {
+    return string(c.text), nil
+}
+
+// CharsetEscape: escape sequence in charset
+// PCRE supports: \d \D \w \W \s \S \h \H \v \V \N \R (and standard control chars)
+CharsetEscape <- '\\' code:[bdDhHNsSwWvVR] {
+    return makeEscape(string([]byte{code.([]byte)[0]})), nil
+} / '\\' code:[fnrtae] {
+    return makeEscape(string([]byte{code.([]byte)[0]})), nil
+} / '\\' 'p' '{' prop:UnicodePropertyValue '}' {
+    return &ast.UnicodePropertyEscape{Property: prop.(string), Negated: false}, nil
+} / '\\' 'P' '{' prop:UnicodePropertyValue '}' {
+    return &ast.UnicodePropertyEscape{Property: prop.(string), Negated: true}, nil
+} / '\\' 'x' [0-9a-fA-F] [0-9a-fA-F] {
+    return &ast.Escape{EscapeType: "hex", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'x' '{' [0-9a-fA-F]+ '}' {
+    return &ast.Escape{EscapeType: "hex_extended", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'o' '{' [0-7]+ '}' {
+    // PCRE octal: \o{ddd}
+    return &ast.Escape{EscapeType: "octal_extended", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] {
+    return &ast.Escape{EscapeType: "unicode", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' '0' [0-7]* {
+    return &ast.Escape{EscapeType: "octal", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'c' [a-zA-Z] {
+    return &ast.Escape{EscapeType: "control", Code: string(c.text), Value: string(c.text)}, nil
+}
+
+// CharsetLiteral: literal character in charset (not ] or \)
+CharsetLiteral <- [^\]\\] {
+    return &ast.CharsetLiteral{Text: string(c.text)}, nil
+} / '\\' char:. {
+    return &ast.CharsetLiteral{Text: string(char.([]byte))}, nil
+}
+
+// =============================================================================
+// TERMINALS
+// =============================================================================
+
+// Terminal: what can appear outside groups/charsets
+// QuotedLiteral must come before Escape to match \Q...\E
+Terminal <- AnyChar / QuotedLiteral / Escape / Literal
+
+// QuotedLiteral: \Q...\E - treat everything between as literal text
+QuotedLiteral <- "\\Q" text:QuotedText "\\E" {
+    return &ast.QuotedLiteral{Text: text.(string)}, nil
+}
+
+// QuotedText: everything until \E (greedy but stops at \E)
+QuotedText <- ( !("\\E") . )* {
+    return string(c.text), nil
+}
+
+// AnyChar: the . metacharacter
+AnyChar <- '.' {
+    return &ast.AnyCharacter{}, nil
+}
+
+// =============================================================================
+// ESCAPE SEQUENCES
+// =============================================================================
+
+// Escape: escape sequences outside charsets
+// PCRE-specific: \K, \N, \R, \X, \o{...}
+// Anchors: \b \B \A \Z \z \G
+// Named backrefs: \k<name>, \k'name', \g{name}, (?P=name)
+// Subroutine calls: \g<n>, \g'n', \g<name>, \g'name'
+Escape <- '\\' 'K' {
+    // \K - reset match start
+    return makeAnchor("K"), nil
+} / '\\' code:[bBAZzG] {
+    return makeAnchor(string([]byte{code.([]byte)[0]})), nil
+} / '\\' 'N' '{' name:UnicodeName '}' {
+    // Unicode named character \N{U+hhhh} or \N{name}
+    return &ast.Escape{EscapeType: "unicode_named", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' code:[dDwWsShHvVNRX] {
+    return makeEscape(string([]byte{code.([]byte)[0]})), nil
+} / '\\' code:[fnrtae] {
+    return makeEscape(string([]byte{code.([]byte)[0]})), nil
+} / '\\' 'p' '{' prop:UnicodePropertyValue '}' {
+    // Unicode property escape \p{...}
+    return &ast.UnicodePropertyEscape{Property: prop.(string), Negated: false}, nil
+} / '\\' 'P' '{' prop:UnicodePropertyValue '}' {
+    // Negated Unicode property escape \P{...}
+    return &ast.UnicodePropertyEscape{Property: prop.(string), Negated: true}, nil
+} / '\\' 'g' '<' name:GroupName '>' {
+    // Oniguruma subroutine call \g<name> or \g<n>
+    nameStr := name.(string)
+    if isDigits(nameStr) {
+        return &ast.RecursiveRef{Target: nameStr}, nil
+    }
+    return &ast.RecursiveRef{Target: nameStr}, nil
+} / '\\' 'g' "'" name:GroupName "'" {
+    // Oniguruma subroutine call \g'name' or \g'n'
+    nameStr := name.(string)
+    if isDigits(nameStr) {
+        return &ast.RecursiveRef{Target: nameStr}, nil
+    }
+    return &ast.RecursiveRef{Target: nameStr}, nil
+} / '\\' 'g' '{' name:GroupNameOrNum '}' {
+    // Named backreference \g{name} or \g{n}
+    nameStr := name.(string)
+    if isDigits(nameStr) {
+        return &ast.BackReference{Number: parseInt(nameStr)}, nil
+    }
+    return &ast.BackReference{Name: nameStr}, nil
+} / '\\' 'k' '<' name:GroupName '>' {
+    // Named backreference \k<name>
+    return &ast.BackReference{Name: name.(string)}, nil
+} / '\\' 'k' "'" name:GroupName "'" {
+    // Named backreference \k'name'
+    return &ast.BackReference{Name: name.(string)}, nil
+} / "(?P=" name:GroupName ')' {
+    // Python named backreference (?P=name)
+    return &ast.BackReference{Name: name.(string)}, nil
+} / '\\' code:[1-9] rest:[0-9]* {
+    // Back-reference \1 through \99 (or higher if groups exist)
+    numStr := string(code.([]byte)) + getString(rest)
+    num := parseInt(numStr)
+    return &ast.BackReference{Number: num}, nil
+} / '\\' 'x' [0-9a-fA-F] [0-9a-fA-F] {
+    return &ast.Escape{EscapeType: "hex", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'x' '{' [0-9a-fA-F]+ '}' {
+    // Extended hex escape \x{h...h}
+    return &ast.Escape{EscapeType: "hex_extended", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'o' '{' [0-7]+ '}' {
+    // PCRE octal: \o{ddd}
+    return &ast.Escape{EscapeType: "octal_extended", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] {
+    return &ast.Escape{EscapeType: "unicode", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' '0' [0-7]* {
+    return &ast.Escape{EscapeType: "octal", Code: string(c.text), Value: string(c.text)}, nil
+} / '\\' 'c' [a-zA-Z] {
+    return &ast.Escape{EscapeType: "control", Code: string(c.text), Value: string(c.text)}, nil
+}
+
+// UnicodePropertyValue: property name like "L", "Lu", "IsLatin", "InGreek", "script=Hiragana"
+UnicodePropertyValue <- [a-zA-Z0-9_=]+ {
+    return string(c.text), nil
+}
+
+// UnicodeName: Unicode character name like "U+0041" or "LATIN CAPITAL LETTER A"
+UnicodeName <- [a-zA-Z0-9_+ ]+ {
+    return string(c.text), nil
+}
+
+// GroupNameOrNum: either a group name or a number (for \g{...})
+GroupNameOrNum <- [a-zA-Z0-9_]+ {
+    return string(c.text), nil
+}
+
+// =============================================================================
+// LITERALS
+// =============================================================================
+
+// Literal: regular characters (not metacharacters)
+Literal <- LiteralChars+ {
+    return &ast.Literal{Text: string(c.text)}, nil
+} / '\\' char:. {
+    // Escaped character becomes literal
+    return &ast.Literal{Text: string(char.([]byte))}, nil
+}
+
+// LiteralChars: characters that don't need escaping in a regex
+// Note: PCRE doesn't use /pattern/ format, so / is a literal char
+LiteralChars <- [a-zA-Z0-9_ !@#%&:;"'<>,`~=/-]
+
+// =============================================================================
+// QUANTIFIERS
+// =============================================================================
+
+// Repeat: quantifiers (greedy, non-greedy, possessive)
+// PCRE supports possessive quantifiers: *+, ++, ?+, {n}+
+// PCRE also supports {,m} for "at most m"
+Repeat <- spec:RepeatSpec modifier:RepeatModifier? {
+    r := spec.(*ast.Repeat)
+    if modifier != nil {
+        switch modifier.(string) {
+        case "?":
+            r.Greedy = false
+        case "+":
+            r.Possessive = true
+        }
+    }
+    return r, nil
+}
+
+// RepeatModifier: ? for non-greedy, + for possessive
+RepeatModifier <- ( '?' / '+' ) {
+    return string(c.text), nil
+}
+
+// RepeatSpec: the quantifier itself
+RepeatSpec <- '*' {
+    return &ast.Repeat{Min: 0, Max: -1, Greedy: true}, nil
+} / '+' {
+    return &ast.Repeat{Min: 1, Max: -1, Greedy: true}, nil
+} / '?' {
+    return &ast.Repeat{Min: 0, Max: 1, Greedy: true}, nil
+} / '{' min:[0-9]+ ',' max:[0-9]+ '}' {
+    minVal := parseInt(min)
+    maxVal := parseInt(max)
+    return &ast.Repeat{Min: minVal, Max: maxVal, Greedy: true}, nil
+} / '{' min:[0-9]+ ',' '}' {
+    minVal := parseInt(min)
+    return &ast.Repeat{Min: minVal, Max: -1, Greedy: true}, nil
+} / '{' ',' max:[0-9]+ '}' {
+    // PCRE extension: {,m} means 0 to m
+    maxVal := parseInt(max)
+    return &ast.Repeat{Min: 0, Max: maxVal, Greedy: true}, nil
+} / '{' exact:[0-9]+ '}' {
+    val := parseInt(exact)
+    return &ast.Repeat{Min: val, Max: val, Greedy: true}, nil
+}
+
+EOF <- !.

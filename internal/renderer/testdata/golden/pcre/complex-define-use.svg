@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="386.80000000000007" height="141" viewBox="0 0 386.80000000000007 141"><style>
+		.literal rect { fill: #ff6b6b; }
+		.escape rect { fill: #bada55; }
+		.charset rect { fill: #cbcbba; }
+		.anchor rect { fill: #6b6659; }
+		.any-character rect { fill: #dae9e5; }
+		.flags rect { fill: #c8e0f9; }
+		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
+		.comment text { fill: #666; font-style: italic; }
+		text { font-family: monospace; font-size: 14px; fill: #000; }
+		.anchor text { fill: #fff; }
+		.quote { fill: #000; }
+		.subexp-label, .charset-label, .flags-label { font-size: 12px; font-style: italic; }
+		.repeat-label { fill: #666; font-size: 12px; }
+	</style><line x1="5" y1="77.5" x2="10" y2="77.5" stroke="#000" stroke-width="2"/><line x1="376.80000000000007" y1="77.5" x2="381.80000000000007" y2="77.5" stroke="#000" stroke-width="2"/><g transform="translate(10,10)"><g class="match"><path d="M 209.20000000000002 67.5 L 219.20000000000002 67.5" fill="none" stroke="#000" stroke-width="2"/><g class="conditional"><rect x="0" y="0" width="209.20000000000002" height="121" rx="3" ry="3"/><text x="10" y="14" font-family="monospace" font-size="12" class="conditional-label">DEFINE</text><g transform="translate(10,24)"><g><g class="condition-yes"><g transform="translate(0,38.5)"><g class="condition-label"><rect x="0" y="0" width="43.6" height="24" rx="3" ry="3"/><text x="21.8" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle">then</text></g></g><g transform="translate(53.6,0)"><g class="match"><g class="subexp"><rect x="0" y="0" width="135.60000000000002" height="87" rx="3" ry="3" fill="none" stroke="#908c83" stroke-width="2"/><text x="10" y="14" font-family="monospace" font-size="12" class="subexp-label">group #1 &#39;d&#39;</text><g transform="translate(10.000000000000007,24)"><g class="match"><g class="charset"><rect x="0" y="0" width="115.60000000000001" height="53" rx="3" ry="3"/><text x="10" y="14" font-family="monospace" font-size="12" class="charset-label">One of:</text><text x="57.800000000000004" y="38" font-family="monospace" font-size="14" text-anchor="middle">&#34;0&#34; - &#34;9&#34;</text></g></g></g></g></g></g></g></g></g></g><g transform="translate(219.20000000000002,55.5)"><g class="repeat"><path d="M 147.60000000000002 12 Q 147.60000000000002 34 137.60000000000002 34 H 10 Q 0 34 0 12" fill="none" stroke="#000" stroke-width="2" class="loop-path"/><path d="M 78.80000000000001 29 L 73.80000000000001 34 L 78.80000000000001 39" fill="none" stroke="#000" stroke-width="2"/><g transform="translate(10,0)"><g class="recursive-ref"><rect x="0" y="0" width="127.60000000000001" height="24" rx="3" ry="3"/><text x="63.800000000000004" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle">recurse to &#39;d&#39;</text></g></g><line x1="0" y1="12" x2="10" y2="12" stroke="#000" stroke-width="2"/><line x1="137.60000000000002" y1="12" x2="147.60000000000002" y2="12" stroke="#000" stroke-width="2"/></g></g></g></g></svg>

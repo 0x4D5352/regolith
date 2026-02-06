@@ -164,6 +164,14 @@ func (r *Renderer) renderNode(node parser.Node) RenderedNode {
 		return r.renderInlineModifier(n)
 	case *parser.BalancedGroup:
 		return r.renderBalancedGroup(n)
+	case *parser.Conditional:
+		return r.renderConditional(n)
+	case *parser.RecursiveRef:
+		return r.renderRecursiveRef(n)
+	case *parser.BranchReset:
+		return r.renderBranchReset(n)
+	case *parser.BacktrackControl:
+		return r.renderBacktrackControl(n)
 	default:
 		// Fallback: render as a simple label
 		return r.renderLabel(fmt.Sprintf("<%s>", node.Type()), "unknown")
@@ -520,6 +528,208 @@ func (r *Renderer) renderBalancedGroup(bg *parser.BalancedGroup) RenderedNode {
 	}
 
 	return r.renderSubexpBox(label, content, fill)
+}
+
+// renderConditional renders a conditional pattern (?(cond)yes|no)
+func (r *Renderer) renderConditional(cond *parser.Conditional) RenderedNode {
+	cfg := r.Config
+
+	// Build condition label
+	var condLabel string
+	switch c := cond.Condition.(type) {
+	case *parser.BackReference:
+		if c.Name != "" {
+			condLabel = fmt.Sprintf("if '%s' matched", c.Name)
+		} else if c.Number >= 0 {
+			condLabel = fmt.Sprintf("if group %d matched", c.Number)
+		} else {
+			condLabel = fmt.Sprintf("if group %d matched", -c.Number)
+		}
+	case *parser.RecursiveRef:
+		if c.Target == "R" {
+			condLabel = "if in recursion"
+		} else if c.Target == "DEFINE" || c.Target == "" {
+			condLabel = "DEFINE"
+		} else {
+			condLabel = fmt.Sprintf("if in recursion to '%s'", c.Target)
+		}
+	case *parser.Literal:
+		if c.Text == "DEFINE" {
+			condLabel = "DEFINE"
+		} else {
+			condLabel = fmt.Sprintf("if %s", c.Text)
+		}
+	case *parser.Subexp:
+		// Assertion as condition
+		switch c.GroupType {
+		case parser.GroupPositiveLookahead:
+			condLabel = "if followed by..."
+		case parser.GroupNegativeLookahead:
+			condLabel = "if not followed by..."
+		case parser.GroupPositiveLookbehind:
+			condLabel = "if preceded by..."
+		case parser.GroupNegativeLookbehind:
+			condLabel = "if not preceded by..."
+		default:
+			condLabel = "if assertion"
+		}
+	default:
+		condLabel = "if condition"
+	}
+
+	// Render the yes (true) branch
+	yesContent := r.renderRegexp(cond.TrueMatch)
+	yesLabel := r.renderLabel("then", "condition-label")
+
+	// Combine yes label and content
+	yesItems := []RenderedNode{yesLabel, yesContent}
+	yesSpaced, yesBBox := SpaceHorizontally(yesItems, cfg.HorizontalGap)
+
+	var children []SVGElement
+	var totalWidth, totalHeight float64
+
+	// Render yes branch elements
+	yesGroup := &Group{Class: "condition-yes"}
+	for _, item := range yesSpaced {
+		yesGroup.Children = append(yesGroup.Children, item.Element)
+	}
+
+	if cond.FalseMatch != nil {
+		// Has a no (false) branch
+		noContent := r.renderRegexp(cond.FalseMatch)
+		noLabel := r.renderLabel("else", "condition-label")
+
+		// Combine no label and content
+		noItems := []RenderedNode{noLabel, noContent}
+		noSpaced, noBBox := SpaceHorizontally(noItems, cfg.HorizontalGap)
+
+		noGroup := &Group{Class: "condition-no"}
+		for _, item := range noSpaced {
+			noGroup.Children = append(noGroup.Children, item.Element)
+		}
+
+		// Stack yes and no branches vertically
+		verticalGap := cfg.VerticalGap
+		totalHeight = yesBBox.Height + verticalGap + noBBox.Height
+		totalWidth = max(yesBBox.Width, noBBox.Width)
+
+		// Position yes branch
+		yesGroup.Transform = fmt.Sprintf("translate(%.2f,0)", (totalWidth-yesBBox.Width)/2)
+
+		// Position no branch
+		noGroup.Transform = fmt.Sprintf("translate(%.2f,%.2f)", (totalWidth-noBBox.Width)/2, yesBBox.Height+verticalGap)
+
+		children = append(children, yesGroup, noGroup)
+	} else {
+		// Only yes branch
+		totalWidth = yesBBox.Width
+		totalHeight = yesBBox.Height
+		children = append(children, yesGroup)
+	}
+
+	// Create the content group
+	contentGroup := &Group{Children: children}
+	contentNode := RenderedNode{
+		Element: contentGroup,
+		BBox:    NewBoundingBox(0, 0, totalWidth, totalHeight),
+	}
+
+	// Wrap in a labeled box with the condition
+	return r.renderLabeledBoxWithContent(condLabel, contentNode, "conditional")
+}
+
+// renderRecursiveRef renders a recursive pattern reference (?R), (?n), (?&name)
+func (r *Renderer) renderRecursiveRef(ref *parser.RecursiveRef) RenderedNode {
+	var label string
+	switch ref.Target {
+	case "R", "0":
+		label = "recurse whole pattern"
+	default:
+		// Check if it's a number or name
+		if len(ref.Target) > 0 {
+			first := ref.Target[0]
+			if first == '+' || first == '-' || (first >= '0' && first <= '9') {
+				label = fmt.Sprintf("recurse to group %s", ref.Target)
+			} else {
+				label = fmt.Sprintf("recurse to '%s'", ref.Target)
+			}
+		} else {
+			label = "recurse"
+		}
+	}
+
+	return r.renderLabel(label, "recursive-ref")
+}
+
+// renderBranchReset renders a branch reset group (?|...)
+func (r *Renderer) renderBranchReset(br *parser.BranchReset) RenderedNode {
+	// Increment depth before rendering nested content
+	r.subexpDepth++
+
+	// Render the contained regexp
+	content := r.renderRegexp(br.Regexp)
+
+	// Decrement depth after rendering
+	r.subexpDepth--
+
+	// Determine fill color based on depth (same logic as subexp)
+	currentDepth := r.subexpDepth
+	var fill string
+	if currentDepth == 0 {
+		fill = r.Config.SubexpFill
+	} else if len(r.Config.SubexpColors) > 0 {
+		colorIndex := (currentDepth - 1) % len(r.Config.SubexpColors)
+		fill = r.Config.SubexpColors[colorIndex]
+	} else {
+		fill = r.Config.SubexpFill
+	}
+
+	return r.renderSubexpBox("branch reset", content, fill)
+}
+
+// renderBacktrackControl renders a backtracking control verb (*FAIL), (*PRUNE), etc.
+func (r *Renderer) renderBacktrackControl(bc *parser.BacktrackControl) RenderedNode {
+	var label string
+	switch bc.Verb {
+	case "ACCEPT":
+		label = "accept match"
+	case "FAIL":
+		label = "force fail"
+	case "MARK":
+		if bc.Arg != "" {
+			label = fmt.Sprintf("mark '%s'", bc.Arg)
+		} else {
+			label = "mark"
+		}
+	case "COMMIT":
+		label = "commit (no retry)"
+	case "PRUNE":
+		if bc.Arg != "" {
+			label = fmt.Sprintf("prune '%s'", bc.Arg)
+		} else {
+			label = "prune"
+		}
+	case "SKIP":
+		if bc.Arg != "" {
+			label = fmt.Sprintf("skip to '%s'", bc.Arg)
+		} else {
+			label = "skip"
+		}
+	case "THEN":
+		if bc.Arg != "" {
+			label = fmt.Sprintf("then '%s'", bc.Arg)
+		} else {
+			label = "then (try next alt)"
+		}
+	default:
+		if bc.Arg != "" {
+			label = fmt.Sprintf("*%s:%s", bc.Verb, bc.Arg)
+		} else {
+			label = fmt.Sprintf("*%s", bc.Verb)
+		}
+	}
+
+	return r.renderLabel(label, "backtrack-control")
 }
 
 // renderMatch renders a sequence of fragments

@@ -8,6 +8,7 @@ import (
 
 	"github.com/0x4d5352/regolith/internal/flavor/dotnet"
 	"github.com/0x4d5352/regolith/internal/flavor/java"
+	"github.com/0x4d5352/regolith/internal/flavor/pcre"
 	"github.com/0x4d5352/regolith/internal/flavor/posix_bre"
 	"github.com/0x4d5352/regolith/internal/flavor/posix_ere"
 	"github.com/0x4d5352/regolith/internal/parser"
@@ -812,6 +813,230 @@ func TestDotNetIntegration(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ast, err := dotnetFlavor.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			validateSVG(t, svg)
+		})
+	}
+}
+
+// TestPCREGoldenFiles tests PCRE patterns against golden file outputs
+func TestPCREGoldenFiles(t *testing.T) {
+	goldenDir := "testdata/golden/pcre"
+
+	// Create golden directory if it doesn't exist
+	if err := os.MkdirAll(goldenDir, 0755); err != nil {
+		t.Fatalf("failed to create golden directory: %v", err)
+	}
+
+	pcreFlavor := &pcre.PCRE{}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		// Basic patterns
+		{"literal", "abc"},
+		{"alternation", "a|b|c"},
+		{"charset", "[a-z]"},
+		{"charset-negated", "[^0-9]"},
+
+		// Groups
+		{"group-capture", "(abc)"},
+		{"group-non-capture", "(?:abc)"},
+		{"group-named-perl", "(?<name>abc)"},
+		{"group-named-perl-alt", "(?'name'abc)"},
+		{"group-named-python", "(?P<name>abc)"},
+		{"group-atomic", "(?>abc)"},
+		{"group-atomic-alt", "(*atomic:abc)"},
+
+		// Lookahead and lookbehind
+		{"lookahead-positive", "(?=abc)"},
+		{"lookahead-positive-alt", "(*pla:abc)"},
+		{"lookahead-negative", "(?!abc)"},
+		{"lookahead-negative-alt", "(*nla:abc)"},
+		{"lookbehind-positive", "(?<=abc)"},
+		{"lookbehind-positive-alt", "(*plb:abc)"},
+		{"lookbehind-negative", "(?<!abc)"},
+		{"lookbehind-negative-alt", "(*nlb:abc)"},
+
+		// Recursive patterns
+		{"recursive-whole", "(?R)"},
+		{"recursive-zero", "(?0)"},
+		{"recursive-number", "(?1)"},
+		{"recursive-name-perl", "(?&name)"},
+		{"recursive-name-python", "(?P>name)"},
+		{"recursive-relative-fwd", "(?+1)"},
+		{"recursive-relative-back", "(?-1)"},
+		{"recursive-oniguruma", `\g<1>`},
+		{"recursive-oniguruma-name", `\g<name>`},
+
+		// Conditional patterns
+		{"conditional-number", "(?(1)yes|no)"},
+		{"conditional-number-no-else", "(?(1)yes)"},
+		{"conditional-name", "(?(name)yes|no)"},
+		{"conditional-name-angle", "(?(<name>)yes|no)"},
+		{"conditional-name-quote", "(?('name')yes|no)"},
+		{"conditional-recursion", "(?(R)yes|no)"},
+		{"conditional-recursion-num", "(?(R1)yes|no)"},
+		{"conditional-define", "(?(DEFINE)(?<digit>[0-9]))"},
+		{"conditional-assertion", "(?(?=a)yes|no)"},
+
+		// Branch reset
+		{"branch-reset", "(?|a|b)"},
+		{"branch-reset-groups", "(?|(red)|(green)|(blue))"},
+
+		// Backtracking control
+		{"backtrack-fail", "(*FAIL)"},
+		{"backtrack-accept", "(*ACCEPT)"},
+		{"backtrack-mark", "(*MARK:test)"},
+		{"backtrack-commit", "(*COMMIT)"},
+		{"backtrack-prune", "(*PRUNE)"},
+		{"backtrack-skip", "(*SKIP)"},
+		{"backtrack-skip-name", "(*SKIP:label)"},
+		{"backtrack-then", "(*THEN)"},
+
+		// Quantifiers
+		{"quantifier-star", "a*"},
+		{"quantifier-plus", "a+"},
+		{"quantifier-question", "a?"},
+		{"quantifier-exact", "a{3}"},
+		{"quantifier-range", "a{2,5}"},
+		{"quantifier-zero-to-m", "a{,5}"},
+
+		// Possessive quantifiers
+		{"possessive-star", "a*+"},
+		{"possessive-plus", "a++"},
+		{"possessive-question", "a?+"},
+		{"possessive-range", "a{2,5}+"},
+
+		// Non-greedy quantifiers
+		{"lazy-star", "a*?"},
+		{"lazy-plus", "a+?"},
+
+		// POSIX classes
+		{"posix-alpha", "[[:alpha:]]"},
+		{"posix-digit", "[[:digit:]]"},
+		{"posix-alnum", "[[:alnum:]]"},
+		{"posix-space", "[[:space:]]"},
+		{"posix-word", "[[:word:]]"},
+		{"posix-negated", "[[:^alpha:]]"},
+
+		// Escapes
+		{"escape-digit", `\d`},
+		{"escape-word", `\w`},
+		{"escape-whitespace", `\s`},
+		{"escape-horizontal-ws", `\h`},
+		{"escape-vertical-ws", `\v`},
+		{"escape-linebreak", `\R`},
+		{"escape-grapheme", `\X`},
+		{"escape-non-newline", `\N`},
+		{"escape-hex-ext", `\x{1F600}`},
+		{"escape-octal-ext", `\o{101}`},
+
+		// Anchors
+		{"anchor-line", "^start$"},
+		{"anchor-input", `\Astart\z`},
+		{"anchor-word", `\bword\b`},
+		{"anchor-reset-match", `foo\Kbar`},
+
+		// Unicode properties
+		{"unicode-letter", `\p{L}`},
+		{"unicode-upper", `\p{Lu}`},
+		{"unicode-negated", `\P{N}`},
+
+		// Back-references
+		{"backref-number", `(a)\1`},
+		{"backref-named-k", `(?<n>a)\k<n>`},
+		{"backref-named-k-alt", `(?'n'a)\k'n'`},
+		{"backref-named-python", `(?P<n>a)(?P=n)`},
+		{"backref-g", `(a)\g{1}`},
+
+		// Quoted literals
+		{"quoted-literal", `\Qhello\E`},
+		{"quoted-context", `foo\Q***\Ebar`},
+
+		// Comments
+		{"comment", `(?#this is a comment)`},
+		{"comment-context", `foo(?#match foo)bar`},
+
+		// Inline modifiers
+		{"modifier-global", `(?i)abc`},
+		{"modifier-scoped", `(?i:abc)`},
+		{"modifier-enable-disable", `(?i-m)abc`},
+
+		// Complex patterns
+		{"complex-balanced-parens", `\((?:[^()]|(?R))*\)`},
+		{"complex-define-use", `(?(DEFINE)(?<d>[0-9]))(?&d)+`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := pcreFlavor.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error for %q: %v", tc.pattern, err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			goldenPath := filepath.Join(goldenDir, tc.name+".svg")
+
+			if os.Getenv("GOLDEN_UPDATE") == "1" {
+				err := os.WriteFile(goldenPath, []byte(svg), 0644)
+				if err != nil {
+					t.Fatalf("failed to write golden file: %v", err)
+				}
+				return
+			}
+
+			expected, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("failed to read golden file %s (run with GOLDEN_UPDATE=1 to create): %v", goldenPath, err)
+			}
+
+			if svg != string(expected) {
+				t.Errorf("SVG output differs from golden file %s", goldenPath)
+				t.Logf("Run with GOLDEN_UPDATE=1 to update golden files")
+			}
+		})
+	}
+}
+
+// TestPCREIntegration tests complete PCRE rendering pipeline
+func TestPCREIntegration(t *testing.T) {
+	pcreFlavor := &pcre.PCRE{}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		{"email", `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`},
+		{"date-named", `(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})`},
+		{"phone", `\d{3}-\d{3}-\d{4}`},
+		{"url", `https?://[a-zA-Z0-9.-]+(?:/[a-zA-Z0-9./-]*)?`},
+		{"quoted-special", `\Q$100.00\E`},
+		{"atomic-greedy", `(?>a+)b`},
+		{"possessive-pattern", `"[^"]*+"`},
+		{"unicode-words", `\p{L}+`},
+		{"modifier-case", `(?i:hello) world`},
+		{"comment-pattern", `\d+(?#digits only)\.\d+`},
+		// PCRE unique features
+		{"recursive-parens", `\((?:[^()]|(?R))*\)`},
+		{"conditional-simple", `(a)?(?(1)b|c)`},
+		{"branch-reset-colors", `(?|(red)|(green)|(blue))`},
+		{"backtrack-control", `a(*SKIP)b|c`},
+		{"define-pattern", `(?(DEFINE)(?<d>[0-9]))(?&d)+`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := pcreFlavor.Parse(tc.pattern)
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}

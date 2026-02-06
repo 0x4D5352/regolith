@@ -26,7 +26,7 @@ coverage:
 
 # Generate all parsers from grammars
 .PHONY: generate
-generate: generate-javascript generate-posix-ere generate-posix-bre generate-gnugrep-bre generate-gnugrep-ere generate-java generate-dotnet
+generate: generate-javascript generate-posix-ere generate-posix-bre generate-gnugrep-bre generate-gnugrep-ere generate-java generate-dotnet generate-pcre
 
 # Generate JavaScript parser
 .PHONY: generate-javascript
@@ -62,6 +62,11 @@ generate-java: $(PIGEON)
 .PHONY: generate-dotnet
 generate-dotnet: $(PIGEON)
 	$(PIGEON) -o internal/flavor/dotnet/parser.go internal/flavor/dotnet/grammar.peg
+
+# Generate PCRE parser
+.PHONY: generate-pcre
+generate-pcre: $(PIGEON)
+	$(PIGEON) -o internal/flavor/pcre/parser.go internal/flavor/pcre/grammar.peg
 
 # Install pigeon if needed
 $(PIGEON):
@@ -113,6 +118,7 @@ help:
 	@echo "  generate-posix-bre  - Regenerate POSIX BRE parser"
 	@echo "  generate-java       - Regenerate Java parser"
 	@echo "  generate-dotnet     - Regenerate .NET parser"
+	@echo "  generate-pcre       - Regenerate PCRE parser"
 	@echo "  clean               - Remove build artifacts"
 	@echo "  release             - Cross-compile for all platforms"
 	@echo "  golden              - Update golden test files"
