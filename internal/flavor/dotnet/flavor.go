@@ -64,7 +64,7 @@ func (d *DotNet) SupportedFeatures() flavor.FeatureSet {
 		AtomicGroups:          true,
 		PossessiveQuantifiers: true, // .NET 7+ has some support
 		RecursivePatterns:     false,
-		ConditionalPatterns:   false, // Supported but not yet implemented
+		ConditionalPatterns:   true,
 		UnicodeProperties:     true,
 		POSIXClasses:          false, // .NET doesn't use POSIX syntax
 		BalancedGroups:        true,  // Unique to .NET!

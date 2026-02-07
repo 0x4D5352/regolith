@@ -410,6 +410,136 @@ func TestFlavorInfo(t *testing.T) {
 	}
 }
 
+func TestConditionalPatterns(t *testing.T) {
+	d := &DotNet{}
+
+	tests := []struct {
+		name    string
+		pattern string
+		wantErr bool
+	}{
+		// Numbered group test
+		{"conditional by number", "(?(1)yes|no)", false},
+		{"conditional by number no else", "(?(1)yes)", false},
+		// Named group test (bare name only in .NET)
+		{"conditional by name", "(?(name)yes|no)", false},
+		{"conditional by name no else", "(?(name)yes)", false},
+		// Assertion conditions
+		{"conditional lookahead", `(?(?=\d)yes|no)`, false},
+		{"conditional negative lookahead", `(?(?!\s)yes|no)`, false},
+		{"conditional lookbehind", `(?(?<=\w)yes|no)`, false},
+		{"conditional negative lookbehind", `(?(?<!\d)yes|no)`, false},
+		// Balanced group idiom: (?(Open)(?!))
+		{"conditional balanced idiom", `(?(Open)(?!))`, false},
+		// Empty branches
+		{"conditional empty yes", "(?(1)|no)", false},
+		{"conditional empty no", "(?(1)yes|)", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := d.Parse(tt.pattern)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse(%q) error = %v, wantErr %v", tt.pattern, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestConditionalAST(t *testing.T) {
+	d := &DotNet{}
+
+	t.Run("numbered condition", func(t *testing.T) {
+		result, err := d.Parse("(?(1)yes|no)")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		if len(result.Matches) != 1 {
+			t.Fatalf("expected 1 match, got %d", len(result.Matches))
+		}
+		if len(result.Matches[0].Fragments) != 1 {
+			t.Fatalf("expected 1 fragment, got %d", len(result.Matches[0].Fragments))
+		}
+
+		cond, ok := result.Matches[0].Fragments[0].Content.(*ast.Conditional)
+		if !ok {
+			t.Fatalf("expected Conditional, got %T", result.Matches[0].Fragments[0].Content)
+		}
+
+		br, ok := cond.Condition.(*ast.BackReference)
+		if !ok {
+			t.Fatalf("expected BackReference condition, got %T", cond.Condition)
+		}
+		if br.Number != 1 {
+			t.Errorf("expected Number=1, got %d", br.Number)
+		}
+
+		if cond.TrueMatch == nil {
+			t.Fatal("expected TrueMatch to be non-nil")
+		}
+		if cond.FalseMatch == nil {
+			t.Fatal("expected FalseMatch to be non-nil")
+		}
+	})
+
+	t.Run("named condition", func(t *testing.T) {
+		result, err := d.Parse("(?(name)yes|no)")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		cond, ok := result.Matches[0].Fragments[0].Content.(*ast.Conditional)
+		if !ok {
+			t.Fatalf("expected Conditional, got %T", result.Matches[0].Fragments[0].Content)
+		}
+
+		br, ok := cond.Condition.(*ast.BackReference)
+		if !ok {
+			t.Fatalf("expected BackReference condition, got %T", cond.Condition)
+		}
+		if br.Name != "name" {
+			t.Errorf("expected Name='name', got %q", br.Name)
+		}
+	})
+
+	t.Run("assertion condition", func(t *testing.T) {
+		result, err := d.Parse(`(?(?=\d)yes|no)`)
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		cond, ok := result.Matches[0].Fragments[0].Content.(*ast.Conditional)
+		if !ok {
+			t.Fatalf("expected Conditional, got %T", result.Matches[0].Fragments[0].Content)
+		}
+
+		sub, ok := cond.Condition.(*ast.Subexp)
+		if !ok {
+			t.Fatalf("expected Subexp condition, got %T", cond.Condition)
+		}
+		if sub.GroupType != "positive_lookahead" {
+			t.Errorf("expected GroupType='positive_lookahead', got %q", sub.GroupType)
+		}
+	})
+
+	t.Run("no else branch", func(t *testing.T) {
+		result, err := d.Parse("(?(1)yes)")
+		if err != nil {
+			t.Fatalf("Parse error: %v", err)
+		}
+
+		cond, ok := result.Matches[0].Fragments[0].Content.(*ast.Conditional)
+		if !ok {
+			t.Fatalf("expected Conditional, got %T", result.Matches[0].Fragments[0].Content)
+		}
+
+		if cond.FalseMatch != nil {
+			t.Error("expected FalseMatch to be nil")
+		}
+	})
+}
+
 func TestComplexPatterns(t *testing.T) {
 	d := &DotNet{}
 

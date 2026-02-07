@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="191.20000000000002" height="107" viewBox="0 0 191.20000000000002 107"><style>
+		.literal rect { fill: #ff6b6b; }
+		.escape rect { fill: #bada55; }
+		.charset rect { fill: #cbcbba; }
+		.anchor rect { fill: #6b6659; }
+		.any-character rect { fill: #dae9e5; }
+		.flags rect { fill: #c8e0f9; }
+		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
+		.comment text { fill: #666; font-style: italic; }
+		text { font-family: monospace; font-size: 14px; fill: #000; }
+		.anchor text { fill: #fff; }
+		.quote { fill: #000; }
+		.subexp-label, .charset-label, .flags-label { font-size: 12px; font-style: italic; }
+		.repeat-label { fill: #666; font-size: 12px; }
+	</style><line x1="5" y1="60.5" x2="10" y2="60.5" stroke="#000" stroke-width="2"/><line x1="181.20000000000002" y1="60.5" x2="186.20000000000002" y2="60.5" stroke="#000" stroke-width="2"/><g transform="translate(10,10)"><g class="match"><g class="conditional"><rect x="0" y="0" width="171.20000000000002" height="87" rx="3" ry="3"/><text x="10" y="14" font-family="monospace" font-size="12" class="conditional-label">if group 1 matched</text><g transform="translate(32.80000000000001,24)"><g><g class="condition-yes" transform="translate(0.00,0)"><g class="condition-label"><rect x="0" y="0" width="43.6" height="24" rx="3" ry="3"/><text x="21.8" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle">then</text></g><g transform="translate(53.6,0)"><g class="match"><g class="literal"><rect x="0" y="0" width="52" height="24" rx="3" ry="3"/><text x="26" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>yes</tspan><tspan class="quote">&#34;</tspan></text></g></g></g></g><g class="condition-no" transform="translate(4.20,29.00)"><g class="condition-label"><rect x="0" y="0" width="43.6" height="24" rx="3" ry="3"/><text x="21.8" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle">else</text></g><g transform="translate(53.6,0)"><g class="match"><g class="literal"><rect x="0" y="0" width="43.6" height="24" rx="3" ry="3"/><text x="21.8" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>no</tspan><tspan class="quote">&#34;</tspan></text></g></g></g></g></g></g></g></g></g></svg>

@@ -49,7 +49,8 @@ MatchFragment <- content:Content repeat:Repeat? {
 // Content is what can appear in a match fragment
 // Note: Comment and InlineModifier must come before Subexp since they start with (?
 // Note: BalancedGroup must come before Subexp since it also starts with (?
-Content <- Anchor / Comment / InlineModifier / BalancedGroup / Subexp / Charset / Terminal
+// Note: Conditional must come before Subexp since it also starts with (?
+Content <- Anchor / Comment / InlineModifier / BalancedGroup / Conditional / Subexp / Charset / Terminal
 
 // Comment: (?#...) - inline comment, matches nothing
 Comment <- "(?#" text:CommentText ')' {
@@ -144,6 +145,63 @@ BalancedGroup <- "(?<" name:GroupName '-' other:GroupName '>' regexp:Regexp ')' 
         Regexp:    regexp.(*ast.Regexp),
     }, nil
 }
+
+// =============================================================================
+// CONDITIONAL PATTERNS
+// =============================================================================
+
+// Conditional: (?(condition)yes-pattern|no-pattern) or (?(condition)yes-pattern)
+// .NET supports: numbered group test, named group test, and assertion conditions
+// Uses Match (not Regexp) for branches because | at the conditional level separates
+// yes/no branches rather than acting as alternation.
+Conditional <- "(?" cond:Condition yes:Match no:('|' no_match:Match)? ')' {
+    condNode := &ast.Conditional{
+        Condition: cond.(ast.Node),
+        TrueMatch: &ast.Regexp{Matches: []*ast.Match{yes.(*ast.Match)}},
+    }
+    if no != nil {
+        pair := no.([]any)
+        condNode.FalseMatch = &ast.Regexp{Matches: []*ast.Match{pair[1].(*ast.Match)}}
+    }
+    return condNode, nil
+}
+
+// Condition: what to test -- always wrapped in parentheses
+// Must come in order of specificity
+Condition <- '(' cond:ConditionInner ')' {
+    return cond, nil
+}
+
+// ConditionInner: the actual condition content
+// .NET supports: numbered group, bare named group, and lookaround assertions
+// Note: .NET does NOT support angle-bracket or single-quote named conditions,
+// relative group references, recursion conditions, or DEFINE
+ConditionInner <- num:[0-9]+ {
+    // (?(n)...) - test if group n matched
+    return &ast.BackReference{Number: parseInt(num)}, nil
+} / assertion:LookaroundAssertion {
+    // Assertion as condition
+    return assertion, nil
+} / name:GroupName {
+    // (?(name)...) - test if named group matched
+    return &ast.BackReference{Name: name.(string)}, nil
+}
+
+// LookaroundAssertion: lookahead/lookbehind as condition
+// Shared rule used by Conditional conditions
+LookaroundAssertion <- "?=" regexp:Regexp {
+    return &ast.Subexp{GroupType: "positive_lookahead", Regexp: regexp.(*ast.Regexp)}, nil
+} / "?!" regexp:Regexp {
+    return &ast.Subexp{GroupType: "negative_lookahead", Regexp: regexp.(*ast.Regexp)}, nil
+} / "?<=" regexp:Regexp {
+    return &ast.Subexp{GroupType: "positive_lookbehind", Regexp: regexp.(*ast.Regexp)}, nil
+} / "?<!" regexp:Regexp {
+    return &ast.Subexp{GroupType: "negative_lookbehind", Regexp: regexp.(*ast.Regexp)}, nil
+}
+
+// =============================================================================
+// GROUPS
+// =============================================================================
 
 // Subexp: groups with optional type marker
 // .NET supports: (), (?:), (?=), (?!), (?<=), (?<!), (?<name>), (?'name'), (?>)
