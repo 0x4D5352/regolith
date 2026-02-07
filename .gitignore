@@ -32,7 +32,7 @@ go.work.sum
 # .vscode/
 
 # static binaries and distribution
-regolith
+/regolith
 dist/
 
 # output
