@@ -42,9 +42,9 @@ type AnyCharacter struct{}
 
 func (a *AnyCharacter) Type() string { return "any_character" }
 
-// Anchor represents ^, $, \b, \B, \A, \Z, \z, \<, \>
+// Anchor represents ^, $, \b, \B, \A, \Z, \z, \<, \>, \b{g}
 type Anchor struct {
-	AnchorType string // "start", "end", "word_boundary", "non_word_boundary", "string_start", "string_end", "absolute_end", "word_start", "word_end"
+	AnchorType string // "start", "end", "word_boundary", "non_word_boundary", "string_start", "string_end", "absolute_end", "word_start", "word_end", "grapheme_cluster_boundary"
 }
 
 func (a *Anchor) Type() string { return "anchor" }
@@ -58,8 +58,9 @@ const (
 	AnchorStringStart     = "string_start"      // \A
 	AnchorStringEnd       = "string_end"        // \Z (before final newline)
 	AnchorAbsoluteEnd     = "absolute_end"      // \z (absolute end)
-	AnchorWordStart       = "word_start"        // \< (GNU)
-	AnchorWordEnd         = "word_end"          // \> (GNU)
+	AnchorWordStart                  = "word_start"                  // \< (GNU)
+	AnchorWordEnd                    = "word_end"                    // \> (GNU)
+	AnchorGraphemeClusterBoundary    = "grapheme_cluster_boundary"   // \b{g} (Java)
 )
 
 // Subexp represents a group: (), (?:), (?=), (?!), (?<=), (?<!), (?<name>)

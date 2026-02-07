@@ -250,8 +250,10 @@ AnyChar <- '.' {
 
 // Escape: escape sequences
 // Java-specific: \a, \e (control chars), \h \H \v \V (whitespace classes), \R \X (matchers)
-// Anchors: \b \B \A \Z \z \G
-Escape <- '\\' code:[bBAZzG] {
+// Anchors: \b \B \A \Z \z \G, \b{g} (grapheme cluster boundary)
+Escape <- "\\b{g}" {
+    return &ast.Anchor{AnchorType: ast.AnchorGraphemeClusterBoundary}, nil
+} / '\\' code:[bBAZzG] {
     return makeAnchor(string([]byte{code.([]byte)[0]})), nil
 } / '\\' code:[dDwWsShHvVRX] {
     return makeEscape(string([]byte{code.([]byte)[0]})), nil

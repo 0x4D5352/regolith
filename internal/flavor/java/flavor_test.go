@@ -93,6 +93,7 @@ func TestJavaAnchors(t *testing.T) {
 		{"end of input (before newline)", `\Z`, false},
 		{"absolute end", `\z`, false},
 		{"end of previous match", `\G`, false},
+		{"grapheme cluster boundary", `\b{g}`, false},
 	}
 
 	for _, tt := range tests {

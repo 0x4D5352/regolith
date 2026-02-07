@@ -391,6 +391,8 @@ func (r *Renderer) renderAnchor(anchor *parser.Anchor) RenderedNode {
 		label = "Absolute end"
 	case "end_of_previous_match":
 		label = "End of previous match"
+	case "grapheme_cluster_boundary":
+		label = "Grapheme cluster boundary"
 	default:
 		label = anchor.AnchorType
 	}

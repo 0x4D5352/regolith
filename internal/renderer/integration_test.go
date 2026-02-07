@@ -6,7 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/0x4d5352/regolith/internal/flavor"
 	"github.com/0x4d5352/regolith/internal/flavor/dotnet"
+	_ "github.com/0x4d5352/regolith/internal/flavor/gnugrep_bre"
+	_ "github.com/0x4d5352/regolith/internal/flavor/gnugrep_ere"
 	"github.com/0x4d5352/regolith/internal/flavor/java"
 	"github.com/0x4d5352/regolith/internal/flavor/pcre"
 	"github.com/0x4d5352/regolith/internal/flavor/posix_bre"
@@ -556,6 +559,8 @@ func TestJavaGoldenFiles(t *testing.T) {
 		{"anchor-line", "^start$"},
 		{"anchor-input", `\Astart\z`},
 		{"anchor-word", `\bword\b`},
+		{"anchor-grapheme-boundary", `\b{g}`},
+		{"anchor-grapheme-boundary-context", `\b{g}test\b{g}`},
 
 		// Unicode properties
 		{"unicode-letter", `\p{L}`},
@@ -637,6 +642,7 @@ func TestJavaIntegration(t *testing.T) {
 		{"unicode-words", `\p{L}+`},
 		{"modifier-case", `(?i:hello) world`},
 		{"comment-pattern", `\d+(?#digits only)\.\d+`},
+		{"grapheme-boundary", `\b{g}\w+\b{g}`},
 	}
 
 	for _, tc := range testCases {
@@ -1037,6 +1043,325 @@ func TestPCREIntegration(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ast, err := pcreFlavor.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			validateSVG(t, svg)
+		})
+	}
+}
+
+// TestGNUGrepBREGoldenFiles tests GNU grep BRE patterns against golden file outputs
+func TestGNUGrepBREGoldenFiles(t *testing.T) {
+	goldenDir := "testdata/golden/gnugrep-bre"
+
+	if err := os.MkdirAll(goldenDir, 0755); err != nil {
+		t.Fatalf("failed to create golden directory: %v", err)
+	}
+
+	breFlavor, ok := flavor.Get("gnugrep-bre")
+	if !ok {
+		t.Fatal("gnugrep-bre flavor not registered")
+	}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		// Basic literals - note + ? | ( ) { } are literal in BRE
+		{"literal", "abc"},
+		{"literal-special", "a+b?c"},
+
+		// BRE groups with \( \)
+		{"group", `\(abc\)`},
+		{"group-nested", `\(\(a\)\(b\)\)`},
+
+		// Character sets
+		{"charset", "[a-z]"},
+		{"charset-negated", "[^0-9]"},
+
+		// POSIX classes
+		{"posix-alpha", "[[:alpha:]]"},
+		{"posix-digit", "[[:digit:]]"},
+		{"posix-multiple", "[[:alpha:][:digit:]]"},
+		{"posix-negated", "[^[:digit:]]"},
+
+		// BRE quantifiers
+		{"quantifier-star", "a*"},
+		{"quantifier-exact", `a\{3\}`},
+		{"quantifier-min", `a\{2,\}`},
+		{"quantifier-range", `a\{2,5\}`},
+
+		// GNU extension: quantifiers
+		{"gnu-plus", `a\+`},
+		{"gnu-question", `a\?`},
+		{"gnu-at-most", `a\{,5\}`},
+
+		// GNU extension: alternation
+		{"gnu-alternation", `cat\|dog`},
+		{"gnu-alternation-multiple", `one\|two\|three`},
+
+		// GNU extensions: word boundaries
+		{"word-start-end", `\<word\>`},
+		{"word-boundary", `\bword\b`},
+		{"non-word-boundary", `\Bword\B`},
+
+		// GNU extensions: character class shorthands
+		{"escape-word", `\w`},
+		{"escape-non-word", `\W`},
+		{"escape-whitespace", `\s`},
+		{"escape-non-whitespace", `\S`},
+
+		// Back-references
+		{"backref", `\(a\)\1`},
+
+		// Anchors
+		{"anchor", "^start$"},
+
+		// Complex GNU BRE patterns
+		{"complex-word-match", `\<\w\+\>`},
+		{"complex-email", `\w\+@\w\+\.\w\+`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := breFlavor.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error for %q: %v", tc.pattern, err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			goldenPath := filepath.Join(goldenDir, tc.name+".svg")
+
+			if os.Getenv("GOLDEN_UPDATE") == "1" {
+				err := os.WriteFile(goldenPath, []byte(svg), 0644)
+				if err != nil {
+					t.Fatalf("failed to write golden file: %v", err)
+				}
+				return
+			}
+
+			expected, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("failed to read golden file %s (run with GOLDEN_UPDATE=1 to create): %v", goldenPath, err)
+			}
+
+			if svg != string(expected) {
+				t.Errorf("SVG output differs from golden file %s", goldenPath)
+				t.Logf("Run with GOLDEN_UPDATE=1 to update golden files")
+			}
+		})
+	}
+}
+
+// TestGNUGrepBREIntegration tests complete GNU grep BRE rendering pipeline
+func TestGNUGrepBREIntegration(t *testing.T) {
+	breFlavor, ok := flavor.Get("gnugrep-bre")
+	if !ok {
+		t.Fatal("gnugrep-bre flavor not registered")
+	}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		{"identifier", `[[:alpha:]_][[:alnum:]_]*`},
+		{"phone", `[0-9]\{3\}-[0-9]\{4\}`},
+		{"word-match", `\<\w\+\>`},
+		{"email", `\w\+@\w\+\.\w\+`},
+		{"alternation-groups", `\(foo\)\|\(bar\)\|\(baz\)`},
+		{"literal-operators", "1+2=3"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := breFlavor.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			validateSVG(t, svg)
+		})
+	}
+}
+
+// TestGNUGrepAliasConsistency verifies that "gnugrep" and "gnugrep-bre" produce identical SVG output
+func TestGNUGrepAliasConsistency(t *testing.T) {
+	gnugrep, ok := flavor.Get("gnugrep")
+	if !ok {
+		t.Fatal("gnugrep flavor not registered")
+	}
+	gnugrepBRE, ok := flavor.Get("gnugrep-bre")
+	if !ok {
+		t.Fatal("gnugrep-bre flavor not registered")
+	}
+
+	patterns := []string{
+		"abc",
+		`\(hello\)\+`,
+		`cat\|dog`,
+		`\<\w\+\>`,
+		`\bword\b`,
+	}
+
+	for _, pattern := range patterns {
+		t.Run(pattern, func(t *testing.T) {
+			ast1, err := gnugrep.Parse(pattern)
+			if err != nil {
+				t.Fatalf("gnugrep parse error: %v", err)
+			}
+
+			ast2, err := gnugrepBRE.Parse(pattern)
+			if err != nil {
+				t.Fatalf("gnugrep-bre parse error: %v", err)
+			}
+
+			r := New(nil)
+			svg1 := r.Render(ast1)
+			svg2 := r.Render(ast2)
+
+			if svg1 != svg2 {
+				t.Error("gnugrep and gnugrep-bre produced different SVG output")
+			}
+		})
+	}
+}
+
+// TestGNUGrepEREGoldenFiles tests GNU grep ERE patterns against golden file outputs
+func TestGNUGrepEREGoldenFiles(t *testing.T) {
+	goldenDir := "testdata/golden/gnugrep-ere"
+
+	if err := os.MkdirAll(goldenDir, 0755); err != nil {
+		t.Fatalf("failed to create golden directory: %v", err)
+	}
+
+	ereFlavor, ok := flavor.Get("gnugrep-ere")
+	if !ok {
+		t.Fatal("gnugrep-ere flavor not registered")
+	}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		// Basic literals
+		{"literal", "abc"},
+
+		// ERE groups
+		{"group", "(abc)"},
+		{"group-nested", "((a)(b))"},
+
+		// ERE alternation
+		{"alternation", "a|b|c"},
+		{"alternation-groups", "(foo)|(bar)"},
+
+		// Character sets
+		{"charset", "[a-z]"},
+		{"charset-negated", "[^0-9]"},
+
+		// POSIX classes
+		{"posix-alpha", "[[:alpha:]]"},
+		{"posix-digit", "[[:digit:]]"},
+		{"posix-multiple", "[[:alpha:][:digit:]]"},
+		{"posix-negated", "[^[:digit:]]"},
+
+		// ERE quantifiers
+		{"quantifier-star", "a*"},
+		{"quantifier-plus", "a+"},
+		{"quantifier-question", "a?"},
+		{"quantifier-exact", "a{3}"},
+		{"quantifier-min", "a{2,}"},
+		{"quantifier-range", "a{2,5}"},
+
+		// GNU extension: at most m
+		{"gnu-at-most", "a{,5}"},
+
+		// GNU extensions: word boundaries
+		{"word-start-end", `\<word\>`},
+		{"word-boundary", `\bword\b`},
+		{"non-word-boundary", `\Bword\B`},
+
+		// GNU extensions: character class shorthands
+		{"escape-word", `\w`},
+		{"escape-non-word", `\W`},
+		{"escape-whitespace", `\s`},
+		{"escape-non-whitespace", `\S`},
+
+		// GNU extension: back-references in ERE
+		{"backref", `(a)\1`},
+		{"backref-multiple", `(a)(b)\1\2`},
+
+		// Anchors
+		{"anchor", "^start$"},
+
+		// Complex GNU ERE patterns
+		{"complex-word-match", `\<\w+\>`},
+		{"complex-email", `\w+@\w+\.\w+`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := ereFlavor.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error for %q: %v", tc.pattern, err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			goldenPath := filepath.Join(goldenDir, tc.name+".svg")
+
+			if os.Getenv("GOLDEN_UPDATE") == "1" {
+				err := os.WriteFile(goldenPath, []byte(svg), 0644)
+				if err != nil {
+					t.Fatalf("failed to write golden file: %v", err)
+				}
+				return
+			}
+
+			expected, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("failed to read golden file %s (run with GOLDEN_UPDATE=1 to create): %v", goldenPath, err)
+			}
+
+			if svg != string(expected) {
+				t.Errorf("SVG output differs from golden file %s", goldenPath)
+				t.Logf("Run with GOLDEN_UPDATE=1 to update golden files")
+			}
+		})
+	}
+}
+
+// TestGNUGrepEREIntegration tests complete GNU grep ERE rendering pipeline
+func TestGNUGrepEREIntegration(t *testing.T) {
+	ereFlavor, ok := flavor.Get("gnugrep-ere")
+	if !ok {
+		t.Fatal("gnugrep-ere flavor not registered")
+	}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		{"identifier", "[[:alpha:]_][[:alnum:]_]*"},
+		{"phone", "[0-9]{3}-[0-9]{4}"},
+		{"word-match", `\<\w+\>`},
+		{"email", `\w+@\w+\.\w+`},
+		{"url-like", "(https?://)?[a-z0-9.-]+"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := ereFlavor.Parse(tc.pattern)
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
