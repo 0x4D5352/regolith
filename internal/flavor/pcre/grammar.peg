@@ -1,7 +1,11 @@
 {
 package pcre
 
-import "github.com/0x4d5352/regolith/internal/ast"
+import (
+    "strings"
+
+    "github.com/0x4d5352/regolith/internal/ast"
+)
 
 // parserState returns the parser state from the global state map
 func parserState(c *current) *ast.ParserState {
@@ -10,8 +14,54 @@ func parserState(c *current) *ast.ParserState {
 }
 
 // Entry point - PCRE patterns are plain strings (no /pattern/flags format)
-Root <- regexp:Regexp EOF {
-    return regexp.(*ast.Regexp), nil
+// Pattern start options like (*UTF), (*LIMIT_MATCH=100) appear before the regexp
+Root <- options:PatternStartOption* regexp:Regexp EOF {
+    r := regexp.(*ast.Regexp)
+    if options != nil {
+        for _, opt := range options.([]any) {
+            r.Options = append(r.Options, opt.(*ast.PatternOption))
+        }
+    }
+    return r, nil
+}
+
+// PatternStartOption: (*OPTION) or (*LIMIT_xxx=nnn) at the start of the pattern
+PatternStartOption <- "(*" opt:LimitOption ')' {
+    return opt, nil
+} / "(*" name:StartOptionName ')' {
+    return &ast.PatternOption{Name: name.(string)}, nil
+}
+
+// LimitOption: (*LIMIT_MATCH=nnn), (*LIMIT_DEPTH=nnn), (*LIMIT_HEAP=nnn)
+LimitOption <- name:LimitOptionName '=' value:Digits {
+    return &ast.PatternOption{Name: name.(string), Value: value.(string)}, nil
+}
+
+LimitOptionName <- "LIMIT_MATCH" { return "LIMIT_MATCH", nil }
+               / "LIMIT_DEPTH" { return "LIMIT_DEPTH", nil }
+               / "LIMIT_HEAP" { return "LIMIT_HEAP", nil }
+
+// StartOptionName: simple pattern start options
+// Order: longer prefixes first to avoid ambiguity
+StartOptionName <- "NOTEMPTY_ATSTART" { return "NOTEMPTY_ATSTART", nil }
+               / "NOTEMPTY" { return "NOTEMPTY", nil }
+               / "NO_AUTO_POSSESS" { return "NO_AUTO_POSSESS", nil }
+               / "NO_DOTSTAR_ANCHOR" { return "NO_DOTSTAR_ANCHOR", nil }
+               / "NO_JIT" { return "NO_JIT", nil }
+               / "NO_START_OPT" { return "NO_START_OPT", nil }
+               / "UTF" { return "UTF", nil }
+               / "UCP" { return "UCP", nil }
+               / "ANYCRLF" { return "ANYCRLF", nil }
+               / "ANY" { return "ANY", nil }
+               / "BSR_ANYCRLF" { return "BSR_ANYCRLF", nil }
+               / "BSR_UNICODE" { return "BSR_UNICODE", nil }
+               / "CRLF" { return "CRLF", nil }
+               / "CR" { return "CR", nil }
+               / "LF" { return "LF", nil }
+               / "NUL" { return "NUL", nil }
+
+Digits <- [0-9]+ {
+    return string(c.text), nil
 }
 
 // Regexp is alternation of matches separated by |
@@ -55,7 +105,7 @@ MatchFragment <- content:Content repeat:Repeat? {
 // 5. RecursiveRef (?R), (?n), (?&name) must come before Subexp
 // 6. BranchReset (?|...) must come before Subexp
 // 7. Subexp handles remaining group types
-Content <- Anchor / BacktrackControl / Comment / InlineModifier / Conditional / RecursiveRef / BranchReset / Subexp / Charset / Terminal
+Content <- Anchor / BacktrackControl / Comment / Callout / InlineModifier / Conditional / RecursiveRef / BranchReset / Subexp / Charset / Terminal
 
 // =============================================================================
 // BACKTRACKING CONTROL VERBS
@@ -102,6 +152,72 @@ Comment <- "(?#" text:CommentText ')' {
 
 // CommentText: everything until the closing )
 CommentText <- [^)]* {
+    return string(c.text), nil
+}
+
+// =============================================================================
+// CALLOUTS
+// =============================================================================
+
+// Callout: (?C), (?Cn), (?C"text"), (?C'text'), (?C`text`), (?C^text^),
+//          (?C%text%), (?C#text#), (?C$text$), (?C{text})
+Callout <- "(?C" num:CalloutNumber ')' {
+    return &ast.Callout{Number: parseInt(num)}, nil
+} / "(?C)" {
+    return &ast.Callout{Number: 0}, nil
+} / "(?C\"" text:CalloutStringDQ "\")" {
+    return &ast.Callout{Number: -1, Text: text.(string)}, nil
+} / "(?C'" text:CalloutStringSQ "')" {
+    return &ast.Callout{Number: -1, Text: text.(string)}, nil
+} / "(?C`" text:CalloutStringBT "`)" {
+    return &ast.Callout{Number: -1, Text: text.(string)}, nil
+} / "(?C^" text:CalloutStringCaret "^)" {
+    return &ast.Callout{Number: -1, Text: text.(string)}, nil
+} / "(?C%" text:CalloutStringPercent "%)" {
+    return &ast.Callout{Number: -1, Text: text.(string)}, nil
+} / "(?C#" text:CalloutStringHash "#)" {
+    return &ast.Callout{Number: -1, Text: text.(string)}, nil
+} / "(?C$" text:CalloutStringDollar "$)" {
+    return &ast.Callout{Number: -1, Text: text.(string)}, nil
+} / "(?C{" text:CalloutStringBrace "})" {
+    return &ast.Callout{Number: -1, Text: text.(string)}, nil
+}
+
+CalloutNumber <- [0-9]+ {
+    return string(c.text), nil
+}
+
+// Each delimiter variant handles doubled-delimiter escaping
+
+CalloutStringDQ <- ( !("\")" / "\"\"") . / "\"\"" )* {
+    return strings.ReplaceAll(string(c.text), `""`, `"`), nil
+}
+
+CalloutStringSQ <- ( !("')" / "''") . / "''" )* {
+    return strings.ReplaceAll(string(c.text), "''", "'"), nil
+}
+
+CalloutStringBT <- ( !("`)" / "``") . / "``" )* {
+    return strings.ReplaceAll(string(c.text), "``", "`"), nil
+}
+
+CalloutStringCaret <- ( !("^)" / "^^") . / "^^" )* {
+    return strings.ReplaceAll(string(c.text), "^^", "^"), nil
+}
+
+CalloutStringPercent <- ( !("%)" / "%%") . / "%%" )* {
+    return strings.ReplaceAll(string(c.text), "%%", "%"), nil
+}
+
+CalloutStringHash <- ( !("#)" / "##") . / "##" )* {
+    return strings.ReplaceAll(string(c.text), "##", "#"), nil
+}
+
+CalloutStringDollar <- ( !("$)" / "$$") . / "$$" )* {
+    return strings.ReplaceAll(string(c.text), "$$", "$"), nil
+}
+
+CalloutStringBrace <- ( !("})" ) . )* {
     return string(c.text), nil
 }
 
@@ -157,14 +273,14 @@ ModifierFlags <- [imsxJUn]+ {
 // =============================================================================
 
 // Conditional: (?(condition)yes-pattern|no-pattern) or (?(condition)yes-pattern)
-Conditional <- "(?" cond:Condition yes:Regexp no:('|' Regexp)? ')' {
+Conditional <- "(?" cond:Condition yes:Match no:('|' no_match:Match)? ')' {
     condNode := &ast.Conditional{
         Condition: cond.(ast.Node),
-        TrueMatch: yes.(*ast.Regexp),
+        TrueMatch: &ast.Regexp{Matches: []*ast.Match{yes.(*ast.Match)}},
     }
     if no != nil {
         pair := no.([]any)
-        condNode.FalseMatch = pair[1].(*ast.Regexp)
+        condNode.FalseMatch = &ast.Regexp{Matches: []*ast.Match{pair[1].(*ast.Match)}}
     }
     return condNode, nil
 }
@@ -269,7 +385,23 @@ BranchReset <- "(?|" regexp:Regexp ')' {
 // Subexp: groups with optional type marker
 // PCRE supports: (), (?:), (?=), (?!), (?<=), (?<!), (?<name>), (?'name'), (?P<name>), (?>)
 // Also alternative syntax: (*atomic:...), (*pla:...), etc.
-Subexp <- "(*atomic:" regexp:Regexp ')' {
+Subexp <- "(*non_atomic_positive_lookahead:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "non_atomic_positive_lookahead", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*napla:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "non_atomic_positive_lookahead", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*non_atomic_positive_lookbehind:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "non_atomic_positive_lookbehind", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*naplb:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "non_atomic_positive_lookbehind", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*atomic_script_run:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "atomic_script_run", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*asr:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "atomic_script_run", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*script_run:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "script_run", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*sr:" regexp:Regexp ')' {
+    return &ast.Subexp{GroupType: "script_run", Regexp: regexp.(*ast.Regexp)}, nil
+} / "(*atomic:" regexp:Regexp ')' {
     // Alternative atomic syntax
     return &ast.Subexp{GroupType: "atomic", Regexp: regexp.(*ast.Regexp)}, nil
 } / "(*positive_lookahead:" regexp:Regexp ')' {
@@ -313,8 +445,10 @@ Subexp <- "(*atomic:" regexp:Regexp ')' {
 // Order matters: more specific patterns first
 GroupType <- "?>" { return "atomic", nil }
           / "?:" { return "non_capture", nil }
+          / "?*" { return "non_atomic_positive_lookahead", nil }
           / "?=" { return "positive_lookahead", nil }
           / "?!" { return "negative_lookahead", nil }
+          / "?<*" { return "non_atomic_positive_lookbehind", nil }
           / "?<=" { return "positive_lookbehind", nil }
           / "?<!" { return "negative_lookbehind", nil }
           / "?P<" name:GroupName ">" {

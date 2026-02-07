@@ -9,8 +9,9 @@ type Node interface {
 
 // Regexp is the root node representing the entire regex
 type Regexp struct {
-	Matches []*Match // Alternation branches
-	Flags   string   // Optional flags (flavor-dependent)
+	Matches []*Match         // Alternation branches
+	Flags   string           // Optional flags (flavor-dependent)
+	Options []*PatternOption // PCRE pattern start options (nil for other flavors)
 }
 
 func (r *Regexp) Type() string { return "regexp" }
@@ -261,6 +262,24 @@ type BacktrackControl struct {
 }
 
 func (bc *BacktrackControl) Type() string { return "backtrack_control" }
+
+// PatternOption represents PCRE2 pattern start options like (*UTF), (*LIMIT_MATCH=d)
+// Used in: PCRE
+type PatternOption struct {
+	Name  string // "UTF", "CR", "LIMIT_MATCH", etc.
+	Value string // For LIMIT_* options, the numeric value; empty otherwise
+}
+
+func (po *PatternOption) Type() string { return "pattern_option" }
+
+// Callout represents PCRE2 callout syntax (?C), (?Cn), (?C"text")
+// Used in: PCRE
+type Callout struct {
+	Number int    // 0-255 for numeric callouts, -1 for string callouts
+	Text   string // Content for string callouts (empty for numeric)
+}
+
+func (co *Callout) Type() string { return "callout" }
 
 // -----------------------------------------------------------------------------
 // Parser state (shared across flavors)

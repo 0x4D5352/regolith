@@ -65,6 +65,8 @@ type QuotedLiteral = ast.QuotedLiteral
 type InlineModifier = ast.InlineModifier
 type BranchReset = ast.BranchReset
 type BacktrackControl = ast.BacktrackControl
+type PatternOption = ast.PatternOption
+type Callout = ast.Callout
 
 // POSIX class name constants (re-exported for compatibility)
 const (

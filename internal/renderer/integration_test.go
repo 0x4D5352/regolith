@@ -753,6 +753,13 @@ func TestDotNetGoldenFiles(t *testing.T) {
 		{"lookbehind-variable", `(?<=a+)b`},
 		{"lookbehind-alternation", `(?<=ab|abc)x`},
 
+		// Conditional patterns
+		{"conditional-number", `(?(1)yes|no)`},
+		{"conditional-name", `(?(name)yes|no)`},
+		{"conditional-assertion", `(?(?=\d)yes|no)`},
+		{"conditional-no-else", `(?(1)yes)`},
+		{"conditional-balanced-idiom", `(?(Open)(?!))`},
+
 		// Complex patterns
 		{"complex-email", `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`},
 		{"complex-balanced", `(?<Open>\()(?<Close-Open>\))`},
@@ -814,6 +821,13 @@ func TestDotNetIntegration(t *testing.T) {
 		{"backref-quote-syntax", `(?'n'a)\k'n'`},
 		{"unlimited-lookbehind", `(?<=\w+)x`},
 		{"explicit-capture-mode", `(?n)(a)(?<named>b)`},
+		// Conditional patterns
+		{"conditional-number", `(?(1)yes|no)`},
+		{"conditional-name", `(?(name)yes|no)`},
+		{"conditional-assertion-lookahead", `(?(?=\d)yes|no)`},
+		{"conditional-assertion-lookbehind", `(?(?<=\w)yes|no)`},
+		{"conditional-no-else", `(?(1)yes)`},
+		{"conditional-balanced-idiom", `(?(Open)(?!))`},
 	}
 
 	for _, tc := range testCases {
@@ -976,6 +990,33 @@ func TestPCREGoldenFiles(t *testing.T) {
 		{"modifier-scoped", `(?i:abc)`},
 		{"modifier-enable-disable", `(?i-m)abc`},
 
+		// Non-atomic lookaround
+		{"non-atomic-lookahead-short", "(?*abc)"},
+		{"non-atomic-lookbehind-short", "(?<*abc)"},
+		{"non-atomic-lookahead-long", "(*napla:abc)"},
+		{"non-atomic-lookbehind-long", "(*naplb:abc)"},
+
+		// Script runs
+		{"script-run-full", "(*script_run:abc)"},
+		{"script-run-short", "(*sr:abc)"},
+		{"atomic-script-run-full", "(*atomic_script_run:abc)"},
+		{"atomic-script-run-short", "(*asr:abc)"},
+
+		// Pattern start options
+		{"option-utf", "(*UTF)abc"},
+		{"option-multiple", "(*UTF)(*UCP)abc"},
+		{"option-limit", "(*LIMIT_MATCH=100)abc"},
+		{"option-combined", "(*UTF)(*LIMIT_MATCH=100)(*CRLF)abc"},
+		{"option-newline", "(*ANYCRLF)abc"},
+		{"option-optimization", "(*NO_AUTO_POSSESS)abc"},
+
+		// Callouts
+		{"callout-default", "a(?C)b"},
+		{"callout-number", "a(?C1)b"},
+		{"callout-string-dq", `a(?C"test")b`},
+		{"callout-string-brace", "a(?C{test})b"},
+		{"callout-escaped-delimiter", `a(?C"say ""hi""")b`},
+
 		// Complex patterns
 		{"complex-balanced-parens", `\((?:[^()]|(?R))*\)`},
 		{"complex-define-use", `(?(DEFINE)(?<d>[0-9]))(?&d)+`},
@@ -1038,6 +1079,18 @@ func TestPCREIntegration(t *testing.T) {
 		{"branch-reset-colors", `(?|(red)|(green)|(blue))`},
 		{"backtrack-control", `a(*SKIP)b|c`},
 		{"define-pattern", `(?(DEFINE)(?<d>[0-9]))(?&d)+`},
+		// Non-atomic lookaround
+		{"non-atomic-lookahead", `(?*foo)bar`},
+		{"non-atomic-lookbehind", `(?<*foo)bar`},
+		// Script runs
+		{"script-run", `(*script_run:\d+)`},
+		{"atomic-script-run", `(*asr:\w+)`},
+		// Pattern start options
+		{"option-utf-ucp", `(*UTF)(*UCP)\d+`},
+		{"option-limit", `(*LIMIT_MATCH=100)\w+`},
+		// Callouts
+		{"callout-in-pattern", `\d+(?C1)\.\d+`},
+		{"callout-string", `a(?C"check")b`},
 	}
 
 	for _, tc := range testCases {

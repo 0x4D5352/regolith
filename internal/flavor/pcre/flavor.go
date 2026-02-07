@@ -61,5 +61,9 @@ func (f *PCRE) SupportedFeatures() flavor.FeatureSet {
 		Comments:              true,
 		BranchReset:           true,
 		BacktrackingControl:   true,
+		Callouts:              true,
+		ScriptRuns:            true,
+		NonAtomicLookaround:   true,
+		PatternStartOptions:   true,
 	}
 }

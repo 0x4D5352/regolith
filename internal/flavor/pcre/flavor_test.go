@@ -490,6 +490,216 @@ func TestBacktrackControlAST(t *testing.T) {
 	}
 }
 
+func TestNonAtomicLookaround(t *testing.T) {
+	p := &PCRE{}
+
+	tests := []struct {
+		name      string
+		pattern   string
+		wantErr   bool
+		groupType string
+	}{
+		{"napla short", "(?*abc)", false, "non_atomic_positive_lookahead"},
+		{"napla long", "(*napla:abc)", false, "non_atomic_positive_lookahead"},
+		{"napla full", "(*non_atomic_positive_lookahead:abc)", false, "non_atomic_positive_lookahead"},
+		{"naplb short", "(?<*abc)", false, "non_atomic_positive_lookbehind"},
+		{"naplb long", "(*naplb:abc)", false, "non_atomic_positive_lookbehind"},
+		{"naplb full", "(*non_atomic_positive_lookbehind:abc)", false, "non_atomic_positive_lookbehind"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := p.Parse(tt.pattern)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse(%q) error = %v, wantErr %v", tt.pattern, err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+
+			if len(result.Matches) != 1 || len(result.Matches[0].Fragments) != 1 {
+				t.Fatalf("Expected 1 match with 1 fragment, got %v", result)
+			}
+
+			subexp, ok := result.Matches[0].Fragments[0].Content.(*ast.Subexp)
+			if !ok {
+				t.Fatalf("Expected Subexp, got %T", result.Matches[0].Fragments[0].Content)
+			}
+
+			if subexp.GroupType != tt.groupType {
+				t.Errorf("GroupType = %q, want %q", subexp.GroupType, tt.groupType)
+			}
+		})
+	}
+}
+
+func TestScriptRuns(t *testing.T) {
+	p := &PCRE{}
+
+	tests := []struct {
+		name      string
+		pattern   string
+		wantErr   bool
+		groupType string
+	}{
+		{"script_run full", "(*script_run:abc)", false, "script_run"},
+		{"sr short", "(*sr:abc)", false, "script_run"},
+		{"atomic_script_run full", "(*atomic_script_run:abc)", false, "atomic_script_run"},
+		{"asr short", "(*asr:abc)", false, "atomic_script_run"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := p.Parse(tt.pattern)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse(%q) error = %v, wantErr %v", tt.pattern, err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+
+			if len(result.Matches) != 1 || len(result.Matches[0].Fragments) != 1 {
+				t.Fatalf("Expected 1 match with 1 fragment, got %v", result)
+			}
+
+			subexp, ok := result.Matches[0].Fragments[0].Content.(*ast.Subexp)
+			if !ok {
+				t.Fatalf("Expected Subexp, got %T", result.Matches[0].Fragments[0].Content)
+			}
+
+			if subexp.GroupType != tt.groupType {
+				t.Errorf("GroupType = %q, want %q", subexp.GroupType, tt.groupType)
+			}
+		})
+	}
+}
+
+func TestPatternStartOptions(t *testing.T) {
+	p := &PCRE{}
+
+	tests := []struct {
+		name    string
+		pattern string
+		wantErr bool
+		opts    []struct {
+			name  string
+			value string
+		}
+	}{
+		{"UTF", "(*UTF)abc", false, []struct{ name, value string }{{"UTF", ""}}},
+		{"UCP", "(*UCP)abc", false, []struct{ name, value string }{{"UCP", ""}}},
+		{"multiple", "(*UTF)(*UCP)abc", false, []struct{ name, value string }{{"UTF", ""}, {"UCP", ""}}},
+		{"LIMIT_MATCH", "(*LIMIT_MATCH=100)abc", false, []struct{ name, value string }{{"LIMIT_MATCH", "100"}}},
+		{"LIMIT_DEPTH", "(*LIMIT_DEPTH=50)abc", false, []struct{ name, value string }{{"LIMIT_DEPTH", "50"}}},
+		{"LIMIT_HEAP", "(*LIMIT_HEAP=1000)abc", false, []struct{ name, value string }{{"LIMIT_HEAP", "1000"}}},
+		{"CR", "(*CR)abc", false, []struct{ name, value string }{{"CR", ""}}},
+		{"LF", "(*LF)abc", false, []struct{ name, value string }{{"LF", ""}}},
+		{"CRLF", "(*CRLF)abc", false, []struct{ name, value string }{{"CRLF", ""}}},
+		{"ANYCRLF", "(*ANYCRLF)abc", false, []struct{ name, value string }{{"ANYCRLF", ""}}},
+		{"ANY", "(*ANY)abc", false, []struct{ name, value string }{{"ANY", ""}}},
+		{"NUL", "(*NUL)abc", false, []struct{ name, value string }{{"NUL", ""}}},
+		{"BSR_ANYCRLF", "(*BSR_ANYCRLF)abc", false, []struct{ name, value string }{{"BSR_ANYCRLF", ""}}},
+		{"BSR_UNICODE", "(*BSR_UNICODE)abc", false, []struct{ name, value string }{{"BSR_UNICODE", ""}}},
+		{"NOTEMPTY", "(*NOTEMPTY)abc", false, []struct{ name, value string }{{"NOTEMPTY", ""}}},
+		{"NOTEMPTY_ATSTART", "(*NOTEMPTY_ATSTART)abc", false, []struct{ name, value string }{{"NOTEMPTY_ATSTART", ""}}},
+		{"NO_AUTO_POSSESS", "(*NO_AUTO_POSSESS)abc", false, []struct{ name, value string }{{"NO_AUTO_POSSESS", ""}}},
+		{"NO_DOTSTAR_ANCHOR", "(*NO_DOTSTAR_ANCHOR)abc", false, []struct{ name, value string }{{"NO_DOTSTAR_ANCHOR", ""}}},
+		{"NO_JIT", "(*NO_JIT)abc", false, []struct{ name, value string }{{"NO_JIT", ""}}},
+		{"NO_START_OPT", "(*NO_START_OPT)abc", false, []struct{ name, value string }{{"NO_START_OPT", ""}}},
+		{"combined", "(*UTF)(*LIMIT_MATCH=100)(*CRLF)abc", false, []struct{ name, value string }{{"UTF", ""}, {"LIMIT_MATCH", "100"}, {"CRLF", ""}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := p.Parse(tt.pattern)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse(%q) error = %v, wantErr %v", tt.pattern, err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+
+			if len(result.Options) != len(tt.opts) {
+				t.Fatalf("Expected %d options, got %d", len(tt.opts), len(result.Options))
+			}
+
+			for i, want := range tt.opts {
+				got := result.Options[i]
+				if got.Name != want.name {
+					t.Errorf("Option[%d].Name = %q, want %q", i, got.Name, want.name)
+				}
+				if got.Value != want.value {
+					t.Errorf("Option[%d].Value = %q, want %q", i, got.Value, want.value)
+				}
+			}
+		})
+	}
+}
+
+func TestCallouts(t *testing.T) {
+	p := &PCRE{}
+
+	tests := []struct {
+		name    string
+		pattern string
+		wantErr bool
+		number  int
+		text    string
+	}{
+		{"default callout", "(?C)", false, 0, ""},
+		{"numbered callout", "(?C1)", false, 1, ""},
+		{"numbered callout 255", "(?C255)", false, 255, ""},
+		{"string callout dq", `(?C"hello")`, false, -1, "hello"},
+		{"string callout sq", "(?C'hello')", false, -1, "hello"},
+		{"string callout bt", "(?C`hello`)", false, -1, "hello"},
+		{"string callout caret", "(?C^hello^)", false, -1, "hello"},
+		{"string callout percent", "(?C%hello%)", false, -1, "hello"},
+		{"string callout hash", "(?C#hello#)", false, -1, "hello"},
+		{"string callout dollar", "(?C$hello$)", false, -1, "hello"},
+		{"string callout brace", "(?C{hello})", false, -1, "hello"},
+		{"escaped delimiter dq", `(?C"say ""hi""")`, false, -1, `say "hi"`},
+		{"in context", `a(?C1)b`, false, 1, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := p.Parse(tt.pattern)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Parse(%q) error = %v, wantErr %v", tt.pattern, err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+
+			// Find the Callout node
+			var callout *ast.Callout
+			for _, m := range result.Matches {
+				for _, f := range m.Fragments {
+					if c, ok := f.Content.(*ast.Callout); ok {
+						callout = c
+						break
+					}
+				}
+			}
+
+			if callout == nil {
+				t.Fatalf("Expected Callout node in AST for %q", tt.pattern)
+			}
+
+			if callout.Number != tt.number {
+				t.Errorf("Callout.Number = %d, want %d", callout.Number, tt.number)
+			}
+			if callout.Text != tt.text {
+				t.Errorf("Callout.Text = %q, want %q", callout.Text, tt.text)
+			}
+		})
+	}
+}
+
 func TestComplexPatterns(t *testing.T) {
 	p := &PCRE{}
 

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="271.6" height="44" viewBox="0 0 271.6 44"><style>
+		.literal rect { fill: #ff6b6b; }
+		.escape rect { fill: #bada55; }
+		.charset rect { fill: #cbcbba; }
+		.anchor rect { fill: #6b6659; }
+		.any-character rect { fill: #dae9e5; }
+		.flags rect { fill: #c8e0f9; }
+		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
+		.comment text { fill: #666; font-style: italic; }
+		text { font-family: monospace; font-size: 14px; fill: #000; }
+		.anchor text { fill: #fff; }
+		.quote { fill: #000; }
+		.subexp-label, .charset-label, .flags-label { font-size: 12px; font-style: italic; }
+		.repeat-label { fill: #666; font-size: 12px; }
+	</style><line x1="5" y1="22" x2="10" y2="22" stroke="#000" stroke-width="2"/><line x1="261.6" y1="22" x2="266.6" y2="22" stroke="#000" stroke-width="2"/><g transform="translate(10,10)"><g class="match"><path d="M 35.2 12 L 45.2 12 M 206.40000000000003 12 L 216.40000000000003 12" fill="none" stroke="#000" stroke-width="2"/><g class="literal"><rect x="0" y="0" width="35.2" height="24" rx="3" ry="3"/><text x="17.6" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>a</tspan><tspan class="quote">&#34;</tspan></text></g><g transform="translate(45.2,0)"><g class="callout"><rect x="0" y="0" width="161.20000000000002" height="24" rx="3" ry="3"/><text x="80.60000000000001" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle">callout &#34;say &#34;hi&#34;&#34;</text></g></g><g transform="translate(216.40000000000003,0)"><g class="literal"><rect x="0" y="0" width="35.2" height="24" rx="3" ry="3"/><text x="17.6" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>b</tspan><tspan class="quote">&#34;</tspan></text></g></g></g></g></svg>

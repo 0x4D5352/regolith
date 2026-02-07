@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/0x4d5352/regolith/internal/parser"
 )
@@ -44,10 +45,27 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 		}
 	}
 
+	// Check for pattern start options (PCRE)
+	var bannerHeight float64
+	var bannerElement SVGElement
+	if len(ast.Options) > 0 {
+		bannerRendered := r.renderPatternOptions(ast.Options)
+		bannerElement = bannerRendered.Element
+		bannerHeight = bannerRendered.BBox.Height + padding/2
+
+		// Ensure the SVG is wide enough for the banner
+		bannerWidth := bannerRendered.BBox.Width + 2*padding
+		if bannerWidth > width {
+			width = bannerWidth
+		}
+
+		height += bannerHeight
+	}
+
 	// Create start and end connectors
 	startX := padding / 2
 	endX := width - padding/2
-	anchorY := padding + rendered.BBox.AnchorY
+	anchorY := bannerHeight + padding + rendered.BBox.AnchorY
 
 	startLine := &Line{
 		X1:          startX,
@@ -69,7 +87,7 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 
 	// Wrap the rendered content in a group with padding offset
 	contentGroup := &Group{
-		Transform: fmt.Sprintf("translate(%g,%g)", padding, padding),
+		Transform: fmt.Sprintf("translate(%g,%g)", padding, bannerHeight+padding),
 		Children:  []SVGElement{rendered.Element},
 	}
 
@@ -79,10 +97,19 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 		contentGroup,
 	}
 
+	// Add banner if present
+	if bannerElement != nil {
+		bannerGroup := &Group{
+			Transform: fmt.Sprintf("translate(%g,%g)", padding, padding/2),
+			Children:  []SVGElement{bannerElement},
+		}
+		children = append(children, bannerGroup)
+	}
+
 	// Add flags if present
 	if flagsElement != nil {
 		flagsGroup := &Group{
-			Transform: fmt.Sprintf("translate(%g,%g)", width-padding-flagsWidth+padding/2, padding),
+			Transform: fmt.Sprintf("translate(%g,%g)", width-padding-flagsWidth+padding/2, bannerHeight+padding),
 			Children:  []SVGElement{flagsElement},
 		}
 		children = append(children, flagsGroup)
@@ -97,6 +124,59 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 	}
 
 	return svg.Render()
+}
+
+// renderPatternOptions renders PCRE pattern start options as a banner
+func (r *Renderer) renderPatternOptions(options []*parser.PatternOption) RenderedNode {
+	cfg := r.Config
+	padding := cfg.Padding / 2
+
+	// Build comma-separated label
+	var parts []string
+	for _, opt := range options {
+		if opt.Value != "" {
+			parts = append(parts, fmt.Sprintf("*%s=%s", opt.Name, opt.Value))
+		} else {
+			parts = append(parts, fmt.Sprintf("*%s", opt.Name))
+		}
+	}
+	label := "Options: " + strings.Join(parts, ", ")
+
+	textWidth := MeasureText(label, cfg)
+	width := textWidth + 2*padding
+	height := cfg.FontSize + 2*padding
+
+	rect := &Rect{
+		X:           0,
+		Y:           0,
+		Width:       width,
+		Height:      height,
+		Rx:          cfg.CornerRadius,
+		Ry:          cfg.CornerRadius,
+		Fill:        "#e8e8e8",
+		Stroke:      "#999",
+		StrokeWidth: cfg.LineWidth,
+	}
+
+	textElem := &Text{
+		X:          width / 2,
+		Y:          height/2 + cfg.FontSize/3,
+		Content:    label,
+		FontFamily: cfg.FontFamily,
+		FontSize:   cfg.FontSize - 2,
+		Anchor:     "middle",
+		Class:      "pattern-options-label",
+	}
+
+	group := &Group{
+		Class:    "pattern-options",
+		Children: []SVGElement{rect, textElem},
+	}
+
+	return RenderedNode{
+		Element: group,
+		BBox:    NewBoundingBox(0, 0, width, height),
+	}
 }
 
 // getStyles returns the CSS styles for the SVG
@@ -172,6 +252,8 @@ func (r *Renderer) renderNode(node parser.Node) RenderedNode {
 		return r.renderBranchReset(n)
 	case *parser.BacktrackControl:
 		return r.renderBacktrackControl(n)
+	case *parser.Callout:
+		return r.renderCallout(n)
 	default:
 		// Fallback: render as a simple label
 		return r.renderLabel(fmt.Sprintf("<%s>", node.Type()), "unknown")
@@ -734,6 +816,17 @@ func (r *Renderer) renderBacktrackControl(bc *parser.BacktrackControl) RenderedN
 	return r.renderLabel(label, "backtrack-control")
 }
 
+// renderCallout renders a PCRE callout (?C), (?Cn), (?C"text")
+func (r *Renderer) renderCallout(n *parser.Callout) RenderedNode {
+	var label string
+	if n.Number >= 0 {
+		label = fmt.Sprintf("callout (%d)", n.Number)
+	} else {
+		label = fmt.Sprintf("callout \"%s\"", n.Text)
+	}
+	return r.renderLabel(label, "callout")
+}
+
 // renderMatch renders a sequence of fragments
 func (r *Renderer) renderMatch(match *parser.Match) RenderedNode {
 	if len(match.Fragments) == 0 {
@@ -1171,6 +1264,14 @@ func (r *Renderer) renderSubexp(subexp *parser.Subexp) RenderedNode {
 		label = "positive lookbehind"
 	case "negative_lookbehind":
 		label = "negative lookbehind"
+	case "non_atomic_positive_lookahead":
+		label = "non-atomic lookahead"
+	case "non_atomic_positive_lookbehind":
+		label = "non-atomic lookbehind"
+	case "script_run":
+		label = "script run"
+	case "atomic_script_run":
+		label = "atomic script run"
 	case "atomic":
 		label = "atomic group"
 	default:

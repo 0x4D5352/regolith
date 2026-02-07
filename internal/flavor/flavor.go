@@ -56,6 +56,10 @@ type FeatureSet struct {
 	Comments              bool // Supports (?#...) comments
 	BranchReset           bool // Supports (?|...)
 	BacktrackingControl   bool // Supports (*PRUNE), (*SKIP), etc.
+	Callouts              bool // Supports (?C), (?Cn), (?C"text")
+	ScriptRuns            bool // Supports (*script_run:...), (*sr:...)
+	NonAtomicLookaround   bool // Supports (?*...), (?<*...), (*napla:...), (*naplb:...)
+	PatternStartOptions   bool // Supports (*UTF), (*LIMIT_MATCH=d), etc.
 }
 
 // registry holds all registered flavors.
