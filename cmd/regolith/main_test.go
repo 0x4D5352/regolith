@@ -385,3 +385,113 @@ func TestBinaryFlavorFlag(t *testing.T) {
 		t.Fatal("SVG file was not created with pcre flavor")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// -unescape flag tests
+// ---------------------------------------------------------------------------
+
+func TestRunUnescapeFlag(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	// Pattern with double escapes + -unescape flag: should produce SVG, no warning
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "-flavor", "java", "-unescape", "-o", out, `\\d+\\.\\d+`}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error with -unescape, got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if _, err := os.Stat(out); os.IsNotExist(err) {
+		t.Fatal("output file was not created")
+	}
+
+	if strings.Contains(stderr.String(), "Note:") {
+		t.Error("expected no warning with -unescape flag, but got one")
+	}
+}
+
+func TestRunDoubleEscapeWarningJava(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	// Java flavor with double escapes but no -unescape flag: should warn
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "-flavor", "java", "-o", out, `\\d+`}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error (warning only), got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if !strings.Contains(stderr.String(), "-unescape") {
+		t.Errorf("expected warning mentioning -unescape, got: %s", stderr.String())
+	}
+}
+
+func TestRunDoubleEscapeWarningDotnet(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	// Dotnet flavor with double escapes but no -unescape flag: should warn
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "-flavor", "dotnet", "-o", out, `\\d+`}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error (warning only), got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if !strings.Contains(stderr.String(), "-unescape") {
+		t.Errorf("expected warning mentioning -unescape, got: %s", stderr.String())
+	}
+}
+
+func TestRunNoWarningForJavaScript(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	// JavaScript flavor with double escapes: no warning expected
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "-flavor", "javascript", "-o", out, `\\d+`}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if strings.Contains(stderr.String(), "-unescape") {
+		t.Error("expected no warning for javascript flavor, but got one")
+	}
+}
+
+func TestRunNoWarningWithoutDoubleEscapes(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	// Java flavor without double escapes: no warning expected
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "-flavor", "java", "-o", out, `\d+`}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if strings.Contains(stderr.String(), "-unescape") {
+		t.Error("expected no warning without double escapes, but got one")
+	}
+}
+
+func TestBinaryUnescapeFlag(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	cmd := exec.Command(binaryPath, "-flavor", "java", "-unescape", "-o", out, `\\d+\\.\\d+`)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		t.Fatalf("binary exited with error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if _, err := os.Stat(out); os.IsNotExist(err) {
+		t.Fatal("SVG file was not created with -unescape flag")
+	}
+
+	if strings.Contains(stderr.String(), "Note:") {
+		t.Error("expected no warning with -unescape flag")
+	}
+}

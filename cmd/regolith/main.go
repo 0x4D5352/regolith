@@ -10,6 +10,7 @@ import (
 
 	"github.com/0x4d5352/regolith/internal/flavor"
 	"github.com/0x4d5352/regolith/internal/renderer"
+	"github.com/0x4d5352/regolith/internal/unescape"
 
 	// Import flavors to register them via init()
 	_ "github.com/0x4d5352/regolith/internal/flavor/dotnet"
@@ -45,6 +46,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	outputFile := fs.String("o", "regex.svg", "Output file path")
 	showVersion := fs.Bool("v", false, "Show version")
 	flavorName := fs.String("flavor", "javascript", "Regex flavor (javascript, java, dotnet, pcre, posix-bre, posix-ere, gnugrep, gnugrep-bre, gnugrep-ere)")
+	unescapeFlag := fs.Bool("unescape", false, `Apply string literal unescaping before parsing (e.g., \\ becomes \)`)
 
 	// Dimension flags
 	padding := fs.Float64("padding", 10, "Padding around diagram")
@@ -81,6 +83,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stderr, "  regolith -flavor javascript '/pattern/gi'\n")
 		fmt.Fprintf(stderr, "  regolith -literal-fill '#ff0000' 'hello'\n")
 		fmt.Fprintf(stderr, "  echo '^hello$' | regolith\n")
+		fmt.Fprintf(stderr, "  regolith -flavor java -unescape '\\\\d+\\\\.\\\\d+'\n")
 	}
 
 	err := fs.Parse(args[1:])
@@ -111,6 +114,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
 		fs.Usage()
 		return err
+	}
+
+	// Apply string literal unescaping if requested, or warn about double escapes
+	if *unescapeFlag {
+		pattern = unescape.JavaStringLiteral(pattern)
+	} else if (*flavorName == "java" || *flavorName == "dotnet") && unescape.ContainsDoubleEscapes(pattern) {
+		fmt.Fprintf(stderr, "Note: Pattern contains '\\\\' sequences. If copied from source code, use -unescape to apply string literal unescaping.\n")
 	}
 
 	// Parse the pattern using the selected flavor
