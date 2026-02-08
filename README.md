@@ -1,7 +1,7 @@
 # regolith
 
 A command-line tool for visualizing regular expressions as SVG railroad diagrams.
-[Heavily inspired by regexper.com by Jeff Avalone](#Acknowledgements).
+[Heavily inspired by regexper.com by Jeff Avalone](#acknowledgements).
 
 ![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)
 
