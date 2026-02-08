@@ -141,7 +141,7 @@ Available dimension flags:
 | Conditional patterns | | | x | x | | | | |
 | Recursive patterns | | | | x | | | | |
 | Balanced groups | | | x | | | | | |
-| Branch reset (`(?|...)`) | | | | x | | | | |
+| Branch reset (`(?\|...)`) | | | | x | | | | |
 | Backtracking control | | | | x | | | | |
 | Callouts | | | | x | | | | |
 | Script runs | | | | x | | | | |
