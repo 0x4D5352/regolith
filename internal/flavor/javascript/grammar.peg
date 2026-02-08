@@ -17,7 +17,9 @@ func parserState(c *current) *ast.ParserState {
 Root <- SlashDelimited / PlainRegexp
 
 // Slash-delimited format: /pattern/flags
-SlashDelimited <- '/' regexp:Regexp '/' flags:Flags? EOF {
+// Sets slashMode so that '/' is not treated as a literal inside the pattern
+SlashDelimited <- '/' &{ c.globalStore["slashMode"] = true; return true, nil } regexp:Regexp '/' flags:Flags? EOF {
+    c.globalStore["slashMode"] = false
     r := regexp.(*ast.Regexp)
     if flags != nil {
         r.Flags = flags.(string)
@@ -26,7 +28,8 @@ SlashDelimited <- '/' regexp:Regexp '/' flags:Flags? EOF {
 }
 
 // Plain pattern without delimiters
-PlainRegexp <- regexp:Regexp EOF {
+// Resets slashMode in case SlashDelimited failed after setting it
+PlainRegexp <- &{ c.globalStore["slashMode"] = false; return true, nil } regexp:Regexp EOF {
     return regexp.(*ast.Regexp), nil
 }
 
@@ -363,8 +366,8 @@ Literal <- LiteralChars+ {
 }
 
 // LiteralChars: characters that don't need escaping in a regex
-// Note: / is excluded so /pattern/flags format works
-LiteralChars <- [a-zA-Z0-9_ !@#%&:;"'<>,`~=-]
+// '/' is allowed as a literal only when not in slash-delimited mode
+LiteralChars <- '/' !{ return c.globalStore["slashMode"] == true, nil } / [a-zA-Z0-9_ !@#%&:;"'<>,`~=-]
 
 // Repeat: quantifiers
 Repeat <- spec:RepeatSpec greedy:'?'? {
