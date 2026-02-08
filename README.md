@@ -1,23 +1,24 @@
 # regolith
 
-A command-line tool for visualizing regular expressions as SVG diagrams.
+A command-line tool for visualizing regular expressions as SVG railroad diagrams.
+[Heavily inspired by regexper.com by Jeff Avalone](#Acknowledgements).
 
-![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)
+![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)
 
 ## Features
 
-- Parse JavaScript regular expression syntax
-- Generate clean SVG diagrams
+- Visualize regex patterns as clean SVG railroad diagrams
+- **8 regex flavors** with dedicated PEG grammars:
+  - **JavaScript** (ECMAScript 2018+) - including `v` flag unicode sets
+  - **Java** (`java.util.regex.Pattern`)
+  - **.NET** (`System.Text.RegularExpressions`)
+  - **PCRE** (PCRE2) - the most feature-rich flavor
+  - **POSIX BRE** (IEEE Std 1003.1)
+  - **POSIX ERE** (IEEE Std 1003.1)
+  - **GNU grep BRE** (BRE with GNU extensions)
+  - **GNU grep ERE** (ERE with GNU extensions, like `grep -E`)
 - Customizable colors and dimensions
-- Support for all standard regex features:
-  - Literals and alternation
-  - Character classes and ranges
-  - Quantifiers (`*`, `+`, `?`, `{n}`, `{n,}`, `{n,m}`)
-  - Capture groups and non-capture groups
-  - Lookahead assertions (`(?=)`, `(?!)`)
-  - Anchors (`^`, `$`, `\b`, `\B`)
-  - Escape sequences (`\d`, `\w`, `\s`, etc.)
-  - Back-references
+- String literal unescaping for Java/.NET patterns copied from source code
 
 ## Installation
 
@@ -32,7 +33,7 @@ go install github.com/0x4d5352/regolith/cmd/regolith@latest
 ```bash
 git clone https://github.com/0x4d5352/regolith.git
 cd regolith
-go build ./cmd/regolith
+make build
 ```
 
 ## Usage
@@ -40,7 +41,7 @@ go build ./cmd/regolith
 ### Basic Usage
 
 ```bash
-# Visualize a regex pattern
+# Visualize a regex pattern (defaults to JavaScript flavor)
 regolith 'a|b|c'
 
 # Specify output file
@@ -50,20 +51,41 @@ regolith -o output.svg '[a-z]+'
 echo '^hello$' | regolith
 ```
 
-### Examples
+### Selecting a Flavor
 
 ```bash
-# Email pattern
-regolith -o email.svg '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+# JavaScript (default) - supports /pattern/flags syntax
+regolith -flavor javascript '/pattern/gi'
 
-# Phone number
-regolith -o phone.svg '\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
+# Java
+regolith -flavor java '(?i)\p{Alpha}+\d{2,}'
 
-# Identifier
-regolith -o identifier.svg '[a-zA-Z_][a-zA-Z0-9_]*'
+# .NET - balanced groups, variable-length lookbehind
+regolith -flavor dotnet '(?<open>\().*?(?<close-open>\))'
 
-# URL pattern
-regolith -o url.svg 'https?://[a-zA-Z0-9.-]+(?:/[a-zA-Z0-9./_-]*)?'
+# PCRE - recursive patterns, callouts, backtracking control
+regolith -flavor pcre '(?R)|(?C1)\b\w+\b(*SKIP)(*FAIL)'
+
+# POSIX BRE - uses \( \) for groups
+regolith -flavor posix-bre '\([[:alpha:]]\{2,\}\)'
+
+# POSIX ERE
+regolith -flavor posix-ere '([[:alpha:]]{2,})'
+
+# GNU grep BRE (also available as just "gnugrep")
+regolith -flavor gnugrep-bre '\bword\b'
+
+# GNU grep ERE
+regolith -flavor gnugrep-ere '\b[[:digit:]]+\b'
+```
+
+### String Literal Unescaping
+
+When copying regex patterns from Java or .NET source code, backslashes are doubled. Use `-unescape` to handle this:
+
+```bash
+# Pattern from Java source: "\\d+\\.\\d+"
+regolith -flavor java -unescape '\\d+\\.\\d+'
 ```
 
 ### Customization
@@ -77,11 +99,11 @@ regolith -literal-fill '#ff6b6b' -escape-fill '#4ecdc4' 'hello\d+'
 Available color flags:
 - `-text-color` - Text color (default: `#000`)
 - `-line-color` - Line/stroke color (default: `#000`)
-- `-literal-fill` - Literal box fill (default: `#dae9e5`)
+- `-literal-fill` - Literal box fill (default: `#ff6b6b`)
 - `-charset-fill` - Character set fill (default: `#cbcbba`)
 - `-escape-fill` - Escape sequence fill (default: `#bada55`)
 - `-anchor-fill` - Anchor box fill (default: `#6b6659`)
-- `-subexp-fill` - Subexpression fill (default: `#e5e5e5`)
+- `-subexp-fill` - Outermost subexpression fill (default: `none`; nested groups cycle through distinct colors)
 
 #### Dimensions
 
@@ -94,107 +116,124 @@ Available dimension flags:
 - `-font-size` - Font size in pixels (default: `14`)
 - `-line-width` - Stroke width for lines (default: `2`)
 
-### All Flags
+## Supported Features by Flavor
 
-```
-regolith - Visualize regular expressions as SVG diagrams
-
-Usage:
-  regolith [flags] <pattern>
-  echo 'pattern' | regolith [flags]
-
-Flags:
-  -anchor-fill string      Anchor box fill color (default "#6b6659")
-  -charset-fill string     Character set box fill color (default "#cbcbba")
-  -escape-fill string      Escape sequence box fill color (default "#bada55")
-  -font-size float         Font size in pixels (default 14)
-  -h                       Show help
-  -line-color string       Line/stroke color (default "#000")
-  -line-width float        Stroke width for lines (default 2)
-  -literal-fill string     Literal box fill color (default "#dae9e5")
-  -o string                Output file path (default "regex.svg")
-  -padding float           Padding around diagram (default 10)
-  -subexp-fill string      Subexpression box fill color (default "#e5e5e5")
-  -text-color string       Text color (default "#000")
-  -v                       Show version
-```
-
-## Supported Regex Features
-
-| Feature | Syntax | Example |
-|---------|--------|---------|
-| Literal | `abc` | `hello` |
-| Alternation | `a\|b` | `cat\|dog` |
-| Character class | `[abc]` | `[aeiou]` |
-| Negated class | `[^abc]` | `[^0-9]` |
-| Range | `[a-z]` | `[A-Za-z]` |
-| Any character | `.` | `a.b` |
-| Zero or more | `*` | `a*` |
-| One or more | `+` | `a+` |
-| Optional | `?` | `a?` |
-| Exact count | `{n}` | `a{3}` |
-| Min count | `{n,}` | `a{2,}` |
-| Range count | `{n,m}` | `a{2,5}` |
-| Non-greedy | `*?` `+?` `??` | `a+?` |
-| Capture group | `()` | `(abc)` |
-| Non-capture | `(?:)` | `(?:abc)` |
-| Positive lookahead | `(?=)` | `(?=abc)` |
-| Negative lookahead | `(?!)` | `(?!abc)` |
-| Start anchor | `^` | `^start` |
-| End anchor | `$` | `end$` |
-| Word boundary | `\b` | `\bword\b` |
-| Digit | `\d` | `\d+` |
-| Word character | `\w` | `\w+` |
-| Whitespace | `\s` | `\s+` |
-| Back-reference | `\1` | `(a)\1` |
+| Feature | JS | Java | .NET | PCRE | POSIX BRE | POSIX ERE | GNU BRE | GNU ERE |
+|---------|----|------|------|------|-----------|-----------|---------|---------|
+| Literals & alternation | x | x | x | x | x | x | x | x |
+| Character classes | x | x | x | x | x | x | x | x |
+| POSIX classes (`[:alpha:]`) | | x | | x | x | x | x | x |
+| Quantifiers (`*+?{n,m}`) | x | x | x | x | x | x | x | x |
+| Non-greedy quantifiers | x | x | x | x | | | | |
+| Possessive quantifiers | | x | x | x | | | | |
+| Capture groups | x | x | x | x | x | x | x | x |
+| Named groups | x | x | x | x | | | | |
+| Non-capture groups | x | x | x | x | | x | | x |
+| Lookahead | x | x | x | x | | | | |
+| Lookbehind | x | x | x | x | | | | |
+| Variable-length lookbehind | | | x | | | | | |
+| Atomic groups | | x | x | x | | | | |
+| Back-references | x | x | x | x | x | | x | x |
+| Unicode properties (`\p{}`) | x | x | x | x | | | | |
+| Unicode sets (v-flag) | x | | | | | | | |
+| Inline modifiers (`(?i)`) | | x | x | x | | | | |
+| Comments (`(?#...)`) | | x | x | x | | | | |
+| Conditional patterns | | | x | x | | | | |
+| Recursive patterns | | | | x | | | | |
+| Balanced groups | | | x | | | | | |
+| Branch reset (`(?|...)`) | | | | x | | | | |
+| Backtracking control | | | | x | | | | |
+| Callouts | | | | x | | | | |
+| Script runs | | | | x | | | | |
+| `\Q...\E` quoted literals | | x | x | x | | | | |
 
 ## Development
 
 ### Prerequisites
 
-- Go 1.21 or later
-- [pigeon](https://github.com/mna/pigeon) for parser generation
+- Go 1.25 or later
+- [pigeon](https://github.com/mna/pigeon) for parser generation (installed automatically by `make generate`)
 
-### Building
+### Building and Testing
 
 ```bash
-# Install dependencies
-go mod download
+make build                # Build for current platform
+make test                 # Run all tests
+make coverage             # Test with coverage report
+make lint                 # Run linter (requires golangci-lint)
+make fmt                  # Format code
+```
 
-# Generate parser (if grammar changes)
-go install github.com/mna/pigeon@latest
-pigeon -o internal/parser/parser.go internal/parser/grammar.peg
+### Parser Generation
 
-# Build
-go build ./cmd/regolith
+Each flavor has a PEG grammar (`grammar.peg`) that is compiled into a Go parser. After modifying any grammar file:
 
-# Run tests
-go test ./...
+```bash
+make generate             # Regenerate ALL flavor parsers
+make generate-javascript  # Regenerate a single flavor's parser
+```
+
+Do **not** edit `parser.go` files directly - they are auto-generated.
+
+### Updating Golden Tests
+
+When intentionally changing SVG output:
+
+```bash
+make golden
+# or equivalently:
+GOLDEN_UPDATE=1 go test ./internal/renderer/...
 ```
 
 ### Project Structure
 
 ```
 regolith/
-├── cmd/regolith/          # CLI entry point
+├── cmd/regolith/              # CLI entry point
 ├── internal/
-│   ├── parser/         # PEG grammar and AST
-│   │   ├── grammar.peg # PEG grammar definition
-│   │   ├── ast.go      # AST node types
-│   │   └── parser.go   # Generated parser
-│   └── renderer/       # SVG rendering
-│       ├── svg.go      # SVG element types
-│       ├── layout.go   # Bounding box and positioning
-│       ├── styles.go   # Configuration
-│       └── renderer.go # Main rendering logic
-├── testdata/           # Test files and golden outputs
+│   ├── ast/                   # Shared AST node types
+│   │   └── ast.go
+│   ├── flavor/                # Flavor interface and registry
+│   │   ├── flavor.go
+│   │   ├── javascript/        # Each flavor has its own package:
+│   │   │   ├── grammar.peg    #   PEG grammar definition
+│   │   │   ├── parser.go      #   Generated parser (do not edit)
+│   │   │   ├── flavor.go      #   Flavor registration
+│   │   │   ├── helpers.go     #   Parser action helpers
+│   │   │   └── flavor_test.go #   Parser tests
+│   │   ├── java/
+│   │   ├── dotnet/
+│   │   ├── pcre/
+│   │   ├── posix_bre/
+│   │   ├── posix_ere/
+│   │   ├── gnugrep_bre/
+│   │   └── gnugrep_ere/
+│   ├── renderer/              # SVG rendering
+│   │   ├── renderer.go        #   AST-to-SVG dispatch
+│   │   ├── svg.go             #   SVG element types
+│   │   ├── layout.go          #   Bounding box and positioning
+│   │   ├── styles.go          #   Color/dimension configuration
+│   │   └── testdata/golden/   #   Golden test SVGs per flavor
+│   ├── parser/                # Legacy shim (delegates to JS flavor)
+│   └── unescape/              # String literal unescaping
 └── README.md
 ```
 
+## Architecture
+
+regolith uses a parse-then-render pipeline: **PEG grammar -> AST -> SVG**.
+
+1. Each regex flavor defines a PEG grammar that produces a shared AST
+2. Flavors register themselves via `init()` and are discovered through a central registry
+3. The renderer walks the AST and produces SVG elements with bounding box calculations
+4. Layout uses anchor points to connect elements with railroad-style paths
+
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-Inspired by [regexper.com](https://regexper.com/) by Jeff Avallone.
+regolith began as a fork of [regexper.com](https://regexper.com/) by [Jeff Avallone](https://github.com/javallone). The railroad diagram visual style, layout approach, and rendering concepts owe a great deal to that project. regolith has since been rewritten in Go and expanded to support multiple regex flavors beyond JavaScript.
+
+The [pigeon](https://github.com/mna/pigeon) PEG parser generator is used for all flavor grammars.
