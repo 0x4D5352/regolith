@@ -232,7 +232,7 @@ regolith uses a parse-then-render pipeline: **PEG grammar -> AST -> SVG**.
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-## Acknowledgments
+## Acknowledgements
 
 regolith began as a fork of [regexper.com](https://regexper.com/) by [Jeff Avallone](https://github.com/javallone). The railroad diagram visual style, layout approach, and rendering concepts owe a great deal to that project. regolith has since been rewritten in Go and expanded to support multiple regex flavors beyond JavaScript.
 
