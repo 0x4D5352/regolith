@@ -60,6 +60,7 @@ type FeatureSet struct {
 	ScriptRuns            bool // Supports (*script_run:...), (*sr:...)
 	NonAtomicLookaround   bool // Supports (?*...), (?<*...), (*napla:...), (*naplb:...)
 	PatternStartOptions   bool // Supports (*UTF), (*LIMIT_MATCH=d), etc.
+	UnicodeSets           bool // Supports v-flag set operations in character classes
 }
 
 // registry holds all registered flavors.

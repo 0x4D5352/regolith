@@ -67,6 +67,9 @@ type BranchReset = ast.BranchReset
 type BacktrackControl = ast.BacktrackControl
 type PatternOption = ast.PatternOption
 type Callout = ast.Callout
+type CharsetIntersection = ast.CharsetIntersection
+type CharsetSubtraction = ast.CharsetSubtraction
+type CharsetStringDisjunction = ast.CharsetStringDisjunction
 
 // POSIX class name constants (re-exported for compatibility)
 const (

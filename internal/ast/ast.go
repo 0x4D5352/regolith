@@ -98,17 +98,41 @@ func (r *Repeat) Type() string { return "repeat" }
 
 // Charset represents a character class: [abc], [^abc], [a-z]
 type Charset struct {
-	Inverted bool          // true if negated [^...]
-	Items    []CharsetItem // Contents of the charset
+	Inverted      bool          // true if negated [^...]
+	Items         []CharsetItem // Contents of the charset
+	SetExpression Node          // CharsetIntersection or CharsetSubtraction; nil for classic charsets
 }
 
-func (c *Charset) Type() string { return "charset" }
+func (c *Charset) Type() string   { return "charset" }
+func (c *Charset) isCharsetItem() {}
 
 // CharsetItem can be a literal, escape, range, or POSIX class within a charset
 type CharsetItem interface {
 	Node
 	isCharsetItem()
 }
+
+// CharsetIntersection represents set intersection with && operator (v-mode)
+type CharsetIntersection struct {
+	Operands []Node // 2+ operands (Charset, Escape, UnicodePropertyEscape, etc.)
+}
+
+func (ci *CharsetIntersection) Type() string { return "charset_intersection" }
+
+// CharsetSubtraction represents set subtraction with -- operator (v-mode)
+type CharsetSubtraction struct {
+	Operands []Node // 2+ operands; first is base, rest are subtracted
+}
+
+func (cs *CharsetSubtraction) Type() string { return "charset_subtraction" }
+
+// CharsetStringDisjunction represents \q{abc|def} string disjunction (v-mode)
+type CharsetStringDisjunction struct {
+	Strings []string // e.g., ["abc", "def"] for \q{abc|def}
+}
+
+func (csd *CharsetStringDisjunction) Type() string   { return "charset_string_disjunction" }
+func (csd *CharsetStringDisjunction) isCharsetItem() {}
 
 // CharsetLiteral is a literal character within a charset
 type CharsetLiteral struct {
@@ -151,7 +175,8 @@ type UnicodePropertyEscape struct {
 	Negated  bool   // true for \P{...}, false for \p{...}
 }
 
-func (upe *UnicodePropertyEscape) Type() string { return "unicode_property_escape" }
+func (upe *UnicodePropertyEscape) Type() string   { return "unicode_property_escape" }
+func (upe *UnicodePropertyEscape) isCharsetItem() {}
 
 // -----------------------------------------------------------------------------
 // Future AST node types for other regex flavors

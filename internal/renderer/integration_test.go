@@ -11,6 +11,7 @@ import (
 	_ "github.com/0x4d5352/regolith/internal/flavor/gnugrep_bre"
 	_ "github.com/0x4d5352/regolith/internal/flavor/gnugrep_ere"
 	"github.com/0x4d5352/regolith/internal/flavor/java"
+	"github.com/0x4d5352/regolith/internal/flavor/javascript"
 	"github.com/0x4d5352/regolith/internal/flavor/pcre"
 	"github.com/0x4d5352/regolith/internal/flavor/posix_bre"
 	"github.com/0x4d5352/regolith/internal/flavor/posix_ere"
@@ -1415,6 +1416,102 @@ func TestGNUGrepEREIntegration(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ast, err := ereFlavor.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error: %v", err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			validateSVG(t, svg)
+		})
+	}
+}
+
+// TestJavaScriptVModeGoldenFiles tests JavaScript v-mode patterns against golden file outputs
+func TestJavaScriptVModeGoldenFiles(t *testing.T) {
+	goldenDir := "testdata/golden/javascript"
+
+	if err := os.MkdirAll(goldenDir, 0755); err != nil {
+		t.Fatalf("failed to create golden directory: %v", err)
+	}
+
+	jsFlavor := &javascript.JavaScript{}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		// Set operations
+		{"v-intersection-basic", `[\w&&\d]`},
+		{"v-subtraction-basic", `[\w--[0-9]]`},
+		{"v-nested-intersection", `[[a-z]&&[aeiou]]`},
+		{"v-chained-intersection", `[\p{Letter}&&\p{ASCII}&&[a-z]]`},
+		{"v-nested-subtraction", `[\p{Letter}--\p{Script=Greek}]`},
+		// Classic charset still works in v-mode grammar
+		{"v-simple-charset", `[a-z]`},
+		// Flags
+		{"v-flag-render", `/abc/giv`},
+		// String disjunction
+		{"v-string-single", `[\q{abc}]`},
+		{"v-string-multi", `[\q{abc|def|ghi}]`},
+		{"v-string-in-intersection", `[\q{abc|def}&&\p{ASCII}]`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := jsFlavor.Parse(tc.pattern)
+			if err != nil {
+				t.Fatalf("parse error for %q: %v", tc.pattern, err)
+			}
+
+			r := New(nil)
+			svg := r.Render(ast)
+
+			goldenPath := filepath.Join(goldenDir, tc.name+".svg")
+
+			if os.Getenv("GOLDEN_UPDATE") == "1" {
+				err := os.WriteFile(goldenPath, []byte(svg), 0644)
+				if err != nil {
+					t.Fatalf("failed to write golden file: %v", err)
+				}
+				return
+			}
+
+			expected, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("failed to read golden file %s (run with GOLDEN_UPDATE=1 to create): %v", goldenPath, err)
+			}
+
+			if svg != string(expected) {
+				t.Errorf("SVG output differs from golden file %s", goldenPath)
+				t.Logf("Run with GOLDEN_UPDATE=1 to update golden files")
+			}
+		})
+	}
+}
+
+// TestJavaScriptVModeIntegration tests complete JavaScript v-mode rendering pipeline
+func TestJavaScriptVModeIntegration(t *testing.T) {
+	jsFlavor := &javascript.JavaScript{}
+
+	testCases := []struct {
+		name    string
+		pattern string
+	}{
+		{"intersection-word-digit", `[\w&&\d]`},
+		{"subtraction-word-digits", `[\w--[0-9]]`},
+		{"nested-vowels", `[[a-z]&&[aeiou]]`},
+		{"chained-ascii-letters", `[\p{Letter}&&\p{ASCII}&&[a-z]]`},
+		{"negated-intersection", `[^\w&&\d]`},
+		{"classic-charset", `[a-z0-9]`},
+		{"string-disjunction", `[\q{abc|def}]`},
+		{"string-in-subtraction", `[\p{Emoji}--\q{😀|😁}]`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ast, err := jsFlavor.Parse(tc.pattern)
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}

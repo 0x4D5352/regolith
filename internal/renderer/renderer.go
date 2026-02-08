@@ -254,6 +254,12 @@ func (r *Renderer) renderNode(node parser.Node) RenderedNode {
 		return r.renderBacktrackControl(n)
 	case *parser.Callout:
 		return r.renderCallout(n)
+	case *parser.CharsetIntersection:
+		return r.renderCharsetIntersection(n)
+	case *parser.CharsetSubtraction:
+		return r.renderCharsetSubtraction(n)
+	case *parser.CharsetStringDisjunction:
+		return r.renderCharsetStringDisjunction(n)
 	default:
 		// Fallback: render as a simple label
 		return r.renderLabel(fmt.Sprintf("<%s>", node.Type()), "unknown")
@@ -321,6 +327,8 @@ func (r *Renderer) renderFlags(flags string) RenderedNode {
 			flagItems = append(flagItems, "unicode")
 		case 'y':
 			flagItems = append(flagItems, "sticky")
+		case 'v':
+			flagItems = append(flagItems, "unicodeSets")
 		}
 	}
 
@@ -1194,19 +1202,14 @@ func (r *Renderer) renderRegexp(regexp *parser.Regexp) RenderedNode {
 
 // renderCharset renders a character class
 func (r *Renderer) renderCharset(charset *parser.Charset) RenderedNode {
+	if charset.SetExpression != nil {
+		return r.renderCharsetSetExpression(charset)
+	}
+
 	// Render charset items
 	var itemTexts []string
 	for _, item := range charset.Items {
-		switch it := item.(type) {
-		case *parser.CharsetLiteral:
-			itemTexts = append(itemTexts, fmt.Sprintf(`"%s"`, it.Text))
-		case *parser.CharsetRange:
-			itemTexts = append(itemTexts, fmt.Sprintf(`"%s" - "%s"`, it.First, it.Last))
-		case *parser.Escape:
-			itemTexts = append(itemTexts, it.Value)
-		case *parser.POSIXClass:
-			itemTexts = append(itemTexts, r.getPOSIXClassLabel(it))
-		}
+		itemTexts = append(itemTexts, r.charsetItemText(item))
 	}
 
 	label := "One of:"
@@ -1215,6 +1218,122 @@ func (r *Renderer) renderCharset(charset *parser.Charset) RenderedNode {
 	}
 
 	return r.renderLabeledBox(label, itemTexts, "charset")
+}
+
+// charsetItemText returns the display text for a single charset item
+func (r *Renderer) charsetItemText(item parser.CharsetItem) string {
+	switch it := item.(type) {
+	case *parser.CharsetLiteral:
+		return fmt.Sprintf(`"%s"`, it.Text)
+	case *parser.CharsetRange:
+		return fmt.Sprintf(`"%s" - "%s"`, it.First, it.Last)
+	case *parser.Escape:
+		return it.Value
+	case *parser.POSIXClass:
+		return r.getPOSIXClassLabel(it)
+	case *parser.Charset:
+		return r.charsetOperandText(it)
+	case *parser.UnicodePropertyEscape:
+		return r.charsetOperandText(it)
+	case *parser.CharsetStringDisjunction:
+		return r.charsetOperandText(it)
+	default:
+		return fmt.Sprintf("<%s>", item.Type())
+	}
+}
+
+// renderCharsetSetExpression renders a charset that uses v-mode set operations
+func (r *Renderer) renderCharsetSetExpression(charset *parser.Charset) RenderedNode {
+	var texts []string
+	switch expr := charset.SetExpression.(type) {
+	case *parser.CharsetIntersection:
+		texts = r.charsetOperandTexts(expr.Operands)
+		label := "Intersection:"
+		if charset.Inverted {
+			label = "NOT Intersection:"
+		}
+		return r.renderLabeledBox(label, texts, "charset")
+	case *parser.CharsetSubtraction:
+		texts = r.charsetOperandTexts(expr.Operands)
+		label := "Subtraction:"
+		if charset.Inverted {
+			label = "NOT Subtraction:"
+		}
+		return r.renderLabeledBox(label, texts, "charset")
+	default:
+		return r.renderLabel("<set-expression>", "charset")
+	}
+}
+
+// renderCharsetIntersection renders a CharsetIntersection node
+func (r *Renderer) renderCharsetIntersection(node *parser.CharsetIntersection) RenderedNode {
+	texts := r.charsetOperandTexts(node.Operands)
+	return r.renderLabeledBox("Intersection:", texts, "charset")
+}
+
+// renderCharsetSubtraction renders a CharsetSubtraction node
+func (r *Renderer) renderCharsetSubtraction(node *parser.CharsetSubtraction) RenderedNode {
+	texts := r.charsetOperandTexts(node.Operands)
+	return r.renderLabeledBox("Subtraction:", texts, "charset")
+}
+
+// renderCharsetStringDisjunction renders a \q{abc|def} string disjunction
+func (r *Renderer) renderCharsetStringDisjunction(node *parser.CharsetStringDisjunction) RenderedNode {
+	var items []string
+	for _, s := range node.Strings {
+		if s == "" {
+			items = append(items, "(empty)")
+		} else {
+			items = append(items, fmt.Sprintf(`"%s"`, s))
+		}
+	}
+	return r.renderLabeledBox("String:", items, "charset")
+}
+
+// charsetOperandTexts returns display strings for a slice of operand Nodes
+func (r *Renderer) charsetOperandTexts(operands []parser.Node) []string {
+	var texts []string
+	for _, op := range operands {
+		texts = append(texts, r.charsetOperandText(op))
+	}
+	return texts
+}
+
+// charsetOperandText converts an operand Node to a display string
+func (r *Renderer) charsetOperandText(node parser.Node) string {
+	switch n := node.(type) {
+	case *parser.Charset:
+		var inner string
+		if n.SetExpression != nil {
+			switch expr := n.SetExpression.(type) {
+			case *parser.CharsetIntersection:
+				inner = strings.Join(r.charsetOperandTexts(expr.Operands), " && ")
+			case *parser.CharsetSubtraction:
+				inner = strings.Join(r.charsetOperandTexts(expr.Operands), " -- ")
+			}
+		} else {
+			var parts []string
+			for _, item := range n.Items {
+				parts = append(parts, r.charsetItemText(item))
+			}
+			inner = strings.Join(parts, ", ")
+		}
+		if n.Inverted {
+			return "[^" + inner + "]"
+		}
+		return "[" + inner + "]"
+	case *parser.UnicodePropertyEscape:
+		if n.Negated {
+			return fmt.Sprintf(`\P{%s}`, n.Property)
+		}
+		return fmt.Sprintf(`\p{%s}`, n.Property)
+	case *parser.Escape:
+		return n.Value
+	case *parser.CharsetStringDisjunction:
+		return fmt.Sprintf(`\q{%s}`, strings.Join(n.Strings, "|"))
+	default:
+		return fmt.Sprintf("<%s>", node.Type())
+	}
 }
 
 // getPOSIXClassLabel returns a human-readable label for a POSIX character class

@@ -52,6 +52,7 @@ func (j *JavaScript) SupportedFlags() []flavor.FlagInfo {
 		{Char: 's', Name: "dotAll", Description: ". matches newlines"},
 		{Char: 'u', Name: "unicode", Description: "Enable full Unicode matching"},
 		{Char: 'y', Name: "sticky", Description: "Matches only from the lastIndex property"},
+		{Char: 'v', Name: "unicodeSets", Description: "Enable set notation and properties of strings"},
 	}
 }
 
@@ -73,6 +74,7 @@ func (j *JavaScript) SupportedFeatures() flavor.FeatureSet {
 		Comments:              false,
 		BranchReset:           false,
 		BacktrackingControl:   false,
+		UnicodeSets:           true,
 	}
 }
 
