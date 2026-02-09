@@ -23,13 +23,13 @@ interested party.
 
 ## Example Results
 
-IPv4 Address (Javascript Regex):
+IPv4 Address:
 ![example of ipv4 regex railroad diagram](./assets/ipv4.svg)
 
-MAC Address (GNU Grep Regex):
+MAC Address:
 ![MAC address regex, GNU Grep style](./assets/mac_address.svg)
 
-ISO-8601 Date format (Java Regex):
+ISO-8601 Date format:
 ![ISO 8601 Date regex, Java style](./assets/iso_8601.svg)
 
 ## Features
