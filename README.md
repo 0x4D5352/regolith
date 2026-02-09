@@ -21,6 +21,13 @@ A `codex` branch will contain an alternative version of this repository built fr
 the same starting point as this one utilizing OpenAI Codex as a comparison for any
 interested party.
 
+## Example Results
+
+![regex example of `\bword\b`](./assets/grep_example.svg)
+![regex example of `(?R)|(?C1)\b\w+\b(*SKIP)(*FAIL)`](./assets/pcre_example.svg)
+![regex example of `(?i)\p{Alpha}+\d{2,}`](./assets/java_example.svg)
+![regex example of `hello\d+`](./assets/color_customization.svg)
+
 ## Features
 
 - Visualize regex patterns as clean SVG railroad diagrams
