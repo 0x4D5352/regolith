@@ -1,1 +1,19 @@
-Wrote regex.svg
+<svg xmlns="http://www.w3.org/2000/svg" width="248" height="92" viewBox="0 0 248 92"><style>
+		.literal rect { fill: #ff6b6b; }
+		.escape rect { fill: #bada55; }
+		.charset rect { fill: #cbcbba; }
+		.anchor rect { fill: #6b6659; }
+		.any-character rect { fill: #dae9e5; }
+		.flags rect { fill: #c8e0f9; }
+		.recursive-ref rect { fill: #c9b3ff; }
+		.callout rect { fill: #ffd699; }
+		.backtrack-control rect { fill: #ffb3a7; }
+		.conditional rect { fill: #b3e5fc; }
+		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
+		.comment text { fill: #666; font-style: italic; }
+		text { font-family: monospace; font-size: 14px; fill: #000; }
+		.anchor text { fill: #fff; }
+		.quote { fill: #000; }
+		.subexp-label, .charset-label, .flags-label { font-size: 12px; font-style: italic; }
+		.repeat-label { fill: #666; font-size: 12px; }
+	</style><line x1="5" y1="22" x2="10" y2="22" stroke="#000" stroke-width="2"/><line x1="95.6" y1="22" x2="100.6" y2="22" stroke="#000" stroke-width="2"/><g transform="translate(10,10)"><g class="match"><g class="literal"><rect x="0" y="0" width="85.6" height="24" rx="3" ry="3"/><text x="42.8" y="16.6666666667" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>pattern</tspan><tspan class="quote">&#34;</tspan></text></g></g></g><g transform="translate(100.6,10)"><g class="flags"><rect x="0" y="0" width="132.4" height="72" rx="3" ry="3"/><text x="10" y="14" font-family="monospace" font-size="12" class="flags-label">Flags:</text><text x="66.2" y="38" font-family="monospace" font-size="14" text-anchor="middle">global</text><text x="66.2" y="57" font-family="monospace" font-size="14" text-anchor="middle">ignore case</text></g></g></svg>

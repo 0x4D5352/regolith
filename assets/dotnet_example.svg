@@ -1,1 +1,19 @@
-Wrote regex.svg
+<svg xmlns="http://www.w3.org/2000/svg" width="639.2" height="88" viewBox="0 0 639.2 88"><style>
+		.literal rect { fill: #ff6b6b; }
+		.escape rect { fill: #bada55; }
+		.charset rect { fill: #cbcbba; }
+		.anchor rect { fill: #6b6659; }
+		.any-character rect { fill: #dae9e5; }
+		.flags rect { fill: #c8e0f9; }
+		.recursive-ref rect { fill: #c9b3ff; }
+		.callout rect { fill: #ffd699; }
+		.backtrack-control rect { fill: #ffb3a7; }
+		.conditional rect { fill: #b3e5fc; }
+		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
+		.comment text { fill: #666; font-style: italic; }
+		text { font-family: monospace; font-size: 14px; fill: #000; }
+		.anchor text { fill: #fff; }
+		.quote { fill: #000; }
+		.subexp-label, .charset-label, .flags-label { font-size: 12px; font-style: italic; }
+		.repeat-label { fill: #666; font-size: 12px; }
+	</style><line x1="5" y1="46" x2="10" y2="46" stroke="#000" stroke-width="2"/><line x1="629.2" y1="46" x2="634.2" y2="46" stroke="#000" stroke-width="2"/><g transform="translate(10,10)"><g class="match"><path d="M 146 36 L 156 36 M 295.2 36 L 305.2 36" fill="none" stroke="#000" stroke-width="2"/><g class="subexp"><rect x="0" y="0" width="146" height="58" rx="3" ry="3" fill="none" stroke="#908c83" stroke-width="2"/><text x="10" y="14" font-family="monospace" font-size="12" class="subexp-label">group #1 &#39;open&#39;</text><g transform="translate(55.4,24)"><g class="match"><g class="literal"><rect x="0" y="0" width="35.2" height="24" rx="3" ry="3"/><text x="17.6" y="16.6666666667" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>(</tspan><tspan class="quote">&#34;</tspan></text></g></g></g></g><g transform="translate(156,4)"><g class="repeat"><path d="M 0 32 Q 0 22 10 22 H 129.2 Q 139.2 22 139.2 32" fill="none" stroke="#000" stroke-width="2" class="skip-path"/><path d="M 139.2 32 Q 139.2 54 129.2 54 H 10 Q 0 54 0 32" fill="none" stroke="#000" stroke-width="2" class="loop-path"/><path d="M 64.6 49 L 69.6 54 L 64.6 59" fill="none" stroke="#000" stroke-width="2"/><g transform="translate(10,20)"><g class="any-character"><rect x="0" y="0" width="119.2" height="24" rx="3" ry="3"/><text x="59.6" y="16.6666666667" font-family="monospace" font-size="14" text-anchor="middle">any character</text></g></g><line x1="0" y1="32" x2="10" y2="32" stroke="#000" stroke-width="2"/><line x1="129.2" y1="32" x2="139.2" y2="32" stroke="#000" stroke-width="2"/></g></g><g transform="translate(305.2,0)"><g class="subexp"><rect x="0" y="0" width="314" height="58" rx="3" ry="3" fill="none" stroke="#908c83" stroke-width="2"/><text x="10" y="14" font-family="monospace" font-size="12" class="subexp-label">balanced group &#39;close&#39; (pop &#39;open&#39;)</text><g transform="translate(139.4,24)"><g class="match"><g class="literal"><rect x="0" y="0" width="35.2" height="24" rx="3" ry="3"/><text x="17.6" y="16.6666666667" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>)</tspan><tspan class="quote">&#34;</tspan></text></g></g></g></g></g></g></g></svg>
