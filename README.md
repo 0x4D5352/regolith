@@ -32,6 +32,9 @@ MAC Address:
 ISO-8601 Date format:
 ![ISO 8601 Date regex, Java style](./assets/iso_8601.svg)
 
+PCRE Regex example:
+![PCRE regex example with a callout, recurse, skip, and force fail](./assets/pcre_example.svg)
+
 ## Features
 
 - Visualize regex patterns as clean SVG railroad diagrams
