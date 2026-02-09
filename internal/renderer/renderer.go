@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/0x4d5352/regolith/internal/parser"
@@ -188,6 +189,10 @@ func (r *Renderer) getStyles() string {
 		.anchor rect { fill: %s; }
 		.any-character rect { fill: %s; }
 		.flags rect { fill: %s; }
+		.recursive-ref rect { fill: %s; }
+		.callout rect { fill: %s; }
+		.backtrack-control rect { fill: %s; }
+		.conditional rect { fill: %s; }
 		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
 		.comment text { fill: #666; font-style: italic; }
 		text { font-family: %s; font-size: %gpx; fill: %s; }
@@ -202,6 +207,10 @@ func (r *Renderer) getStyles() string {
 		r.Config.AnchorFill,
 		r.Config.AnyCharFill,
 		r.Config.FlagsFill,
+		r.Config.RecursiveRefFill,
+		r.Config.CalloutFill,
+		r.Config.BacktrackControlFill,
+		r.Config.ConditionalFill,
 		r.Config.FontFamily,
 		r.Config.FontSize,
 		r.Config.TextColor,
@@ -1128,16 +1137,20 @@ func (r *Renderer) renderRegexp(regexp *parser.Regexp) RenderedNode {
 		itemAnchorY := item.BBox.AnchorY
 		itemX := connectorWidth
 
+		// Use an effective radius that won't cause path reversal when branches are close
+		gap := math.Abs(itemAnchorY - anchorY)
+		effectiveRadius := math.Min(curveRadius, gap/2)
+
 		// Left connector curve
 		leftPath := NewPathBuilder()
 		leftPath.MoveTo(0, anchorY)
 		if itemAnchorY < anchorY {
-			leftPath.QuadraticTo(curveRadius, anchorY, curveRadius, anchorY-curveRadius)
-			leftPath.VerticalTo(itemAnchorY + curveRadius)
+			leftPath.QuadraticTo(curveRadius, anchorY, curveRadius, anchorY-effectiveRadius)
+			leftPath.VerticalTo(itemAnchorY + effectiveRadius)
 			leftPath.QuadraticTo(curveRadius, itemAnchorY, itemX, itemAnchorY)
 		} else if itemAnchorY > anchorY {
-			leftPath.QuadraticTo(curveRadius, anchorY, curveRadius, anchorY+curveRadius)
-			leftPath.VerticalTo(itemAnchorY - curveRadius)
+			leftPath.QuadraticTo(curveRadius, anchorY, curveRadius, anchorY+effectiveRadius)
+			leftPath.VerticalTo(itemAnchorY - effectiveRadius)
 			leftPath.QuadraticTo(curveRadius, itemAnchorY, itemX, itemAnchorY)
 		} else {
 			leftPath.HorizontalTo(itemX)
@@ -1154,12 +1167,12 @@ func (r *Renderer) renderRegexp(regexp *parser.Regexp) RenderedNode {
 		rightPath := NewPathBuilder()
 		rightPath.MoveTo(rightX, itemAnchorY)
 		if itemAnchorY < anchorY {
-			rightPath.QuadraticTo(width-curveRadius, itemAnchorY, width-curveRadius, itemAnchorY+curveRadius)
-			rightPath.VerticalTo(anchorY - curveRadius)
+			rightPath.QuadraticTo(width-curveRadius, itemAnchorY, width-curveRadius, itemAnchorY+effectiveRadius)
+			rightPath.VerticalTo(anchorY - effectiveRadius)
 			rightPath.QuadraticTo(width-curveRadius, anchorY, width, anchorY)
 		} else if itemAnchorY > anchorY {
-			rightPath.QuadraticTo(width-curveRadius, itemAnchorY, width-curveRadius, itemAnchorY-curveRadius)
-			rightPath.VerticalTo(anchorY + curveRadius)
+			rightPath.QuadraticTo(width-curveRadius, itemAnchorY, width-curveRadius, itemAnchorY-effectiveRadius)
+			rightPath.VerticalTo(anchorY + effectiveRadius)
 			rightPath.QuadraticTo(width-curveRadius, anchorY, width, anchorY)
 		} else {
 			rightPath.HorizontalTo(width)

@@ -20,16 +20,20 @@ type Config struct {
 	LineWidth       float64
 
 	// Element-specific colors
-	LiteralFill      string
-	CharsetFill      string
-	EscapeFill       string
-	AnchorFill       string
-	SubexpFill       string // Used for outermost subexp (depth 0)
-	SubexpStroke     string // Stroke color for subexp boxes
-	SubexpColors     []string // Colors to cycle through for nested subexps (depth 1+)
-	AnyCharFill      string
-	FlagsFill        string
-	RepeatLabelColor string
+	LiteralFill          string
+	CharsetFill          string
+	EscapeFill           string
+	AnchorFill           string
+	SubexpFill           string // Used for outermost subexp (depth 0)
+	SubexpStroke         string // Stroke color for subexp boxes
+	SubexpColors         []string // Colors to cycle through for nested subexps (depth 1+)
+	AnyCharFill          string
+	FlagsFill            string
+	RepeatLabelColor     string
+	RecursiveRefFill     string
+	CalloutFill          string
+	BacktrackControlFill string
+	ConditionalFill      string
 }
 
 // DefaultConfig returns the default styling configuration
@@ -69,8 +73,12 @@ func DefaultConfig() *Config {
 			"#f8d7da", // Light pink
 			"#e2d5f0", // Light lavender
 		},
-		AnyCharFill:      "#dae9e5",
-		FlagsFill:        "#c8e0f9",
-		RepeatLabelColor: "#666",
+		AnyCharFill:          "#dae9e5",
+		FlagsFill:            "#c8e0f9",
+		RepeatLabelColor:     "#666",
+		RecursiveRefFill:     "#c9b3ff", // Light lavender
+		CalloutFill:          "#ffd699", // Light orange
+		BacktrackControlFill: "#ffb3a7", // Light salmon
+		ConditionalFill:      "#b3e5fc", // Light cyan
 	}
 }

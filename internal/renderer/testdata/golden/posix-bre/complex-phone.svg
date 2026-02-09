@@ -5,6 +5,10 @@
 		.anchor rect { fill: #6b6659; }
 		.any-character rect { fill: #dae9e5; }
 		.flags rect { fill: #c8e0f9; }
+		.recursive-ref rect { fill: #c9b3ff; }
+		.callout rect { fill: #ffd699; }
+		.backtrack-control rect { fill: #ffb3a7; }
+		.conditional rect { fill: #b3e5fc; }
 		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
 		.comment text { fill: #666; font-style: italic; }
 		text { font-family: monospace; font-size: 14px; fill: #000; }
