@@ -1135,7 +1135,9 @@ func (r *Renderer) renderRegexp(regexp *parser.Regexp) RenderedNode {
 	// Create connector paths
 	for _, item := range spacedItems {
 		itemAnchorY := item.BBox.AnchorY
-		itemX := connectorWidth
+		// Use actual anchor positions to account for centering by SpaceVertically
+		itemLeftX := connectorWidth + item.BBox.AnchorLeft
+		itemRightX := connectorWidth + item.BBox.AnchorRight
 
 		// Use an effective radius that won't cause path reversal when branches are close
 		gap := math.Abs(itemAnchorY - anchorY)
@@ -1147,13 +1149,13 @@ func (r *Renderer) renderRegexp(regexp *parser.Regexp) RenderedNode {
 		if itemAnchorY < anchorY {
 			leftPath.QuadraticTo(curveRadius, anchorY, curveRadius, anchorY-effectiveRadius)
 			leftPath.VerticalTo(itemAnchorY + effectiveRadius)
-			leftPath.QuadraticTo(curveRadius, itemAnchorY, itemX, itemAnchorY)
+			leftPath.QuadraticTo(curveRadius, itemAnchorY, itemLeftX, itemAnchorY)
 		} else if itemAnchorY > anchorY {
 			leftPath.QuadraticTo(curveRadius, anchorY, curveRadius, anchorY+effectiveRadius)
 			leftPath.VerticalTo(itemAnchorY - effectiveRadius)
-			leftPath.QuadraticTo(curveRadius, itemAnchorY, itemX, itemAnchorY)
+			leftPath.QuadraticTo(curveRadius, itemAnchorY, itemLeftX, itemAnchorY)
 		} else {
-			leftPath.HorizontalTo(itemX)
+			leftPath.HorizontalTo(itemLeftX)
 		}
 
 		children = append(children, &Path{
@@ -1163,9 +1165,8 @@ func (r *Renderer) renderRegexp(regexp *parser.Regexp) RenderedNode {
 		})
 
 		// Right connector curve
-		rightX := connectorWidth + item.BBox.Width
 		rightPath := NewPathBuilder()
-		rightPath.MoveTo(rightX, itemAnchorY)
+		rightPath.MoveTo(itemRightX, itemAnchorY)
 		if itemAnchorY < anchorY {
 			rightPath.QuadraticTo(width-curveRadius, itemAnchorY, width-curveRadius, itemAnchorY+effectiveRadius)
 			rightPath.VerticalTo(anchorY - effectiveRadius)
