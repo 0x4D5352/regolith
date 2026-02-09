@@ -23,10 +23,12 @@ interested party.
 
 ## Example Results
 
-![regex example of `\bword\b`](./assets/grep_example.svg)
-![regex example of `(?R)|(?C1)\b\w+\b(*SKIP)(*FAIL)`](./assets/pcre_example.svg)
-![regex example of `(?i)\p{Alpha}+\d{2,}`](./assets/java_example.svg)
-![regex example of `hello\d+`](./assets/color_customization.svg)
+IPv4 Address (Javascript Regex):
+![example of ipv4 regex railroad diagram](./assets/ipv4.svg)
+MAC Address (GNU Grep Regex):
+![MAC address regex, GNU Grep style](./assets/mac_address.svg)
+ISO-8601 Date format (Java Regex):
+![ISO 8601 Date regex, Java style](./assets/iso_8601.svg)
 
 ## Features
 
