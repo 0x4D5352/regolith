@@ -3,8 +3,22 @@ package renderer
 import (
 	"fmt"
 	"html"
+	"strconv"
 	"strings"
 )
+
+// fmtFloat formats a float64 for SVG attributes with consistent cross-platform output.
+// It uses fixed-decimal formatting with trailing zero trimming to eliminate
+// FMA vs non-FMA precision artifacts (e.g. "68.80000000000001" -> "68.8").
+func fmtFloat(v float64) string {
+	s := strconv.FormatFloat(v, 'f', 10, 64)
+	// Trim trailing zeros after decimal point
+	if strings.Contains(s, ".") {
+		s = strings.TrimRight(s, "0")
+		s = strings.TrimRight(s, ".")
+	}
+	return s
+}
 
 // SVGElement is the interface for all SVG elements
 type SVGElement interface {
@@ -53,16 +67,16 @@ type Rect struct {
 
 func (r *Rect) Render() string {
 	var attrs []string
-	attrs = append(attrs, fmt.Sprintf(`x="%g"`, r.X))
-	attrs = append(attrs, fmt.Sprintf(`y="%g"`, r.Y))
-	attrs = append(attrs, fmt.Sprintf(`width="%g"`, r.Width))
-	attrs = append(attrs, fmt.Sprintf(`height="%g"`, r.Height))
+	attrs = append(attrs, `x="`+fmtFloat(r.X)+`"`)
+	attrs = append(attrs, `y="`+fmtFloat(r.Y)+`"`)
+	attrs = append(attrs, `width="`+fmtFloat(r.Width)+`"`)
+	attrs = append(attrs, `height="`+fmtFloat(r.Height)+`"`)
 
 	if r.Rx > 0 {
-		attrs = append(attrs, fmt.Sprintf(`rx="%g"`, r.Rx))
+		attrs = append(attrs, `rx="`+fmtFloat(r.Rx)+`"`)
 	}
 	if r.Ry > 0 {
-		attrs = append(attrs, fmt.Sprintf(`ry="%g"`, r.Ry))
+		attrs = append(attrs, `ry="`+fmtFloat(r.Ry)+`"`)
 	}
 	if r.Fill != "" {
 		attrs = append(attrs, fmt.Sprintf(`fill="%s"`, r.Fill))
@@ -71,7 +85,7 @@ func (r *Rect) Render() string {
 		attrs = append(attrs, fmt.Sprintf(`stroke="%s"`, r.Stroke))
 	}
 	if r.StrokeWidth > 0 {
-		attrs = append(attrs, fmt.Sprintf(`stroke-width="%g"`, r.StrokeWidth))
+		attrs = append(attrs, `stroke-width="`+fmtFloat(r.StrokeWidth)+`"`)
 	}
 	if r.Class != "" {
 		attrs = append(attrs, fmt.Sprintf(`class="%s"`, r.Class))
@@ -94,14 +108,14 @@ type Text struct {
 
 func (t *Text) Render() string {
 	var attrs []string
-	attrs = append(attrs, fmt.Sprintf(`x="%g"`, t.X))
-	attrs = append(attrs, fmt.Sprintf(`y="%g"`, t.Y))
+	attrs = append(attrs, `x="`+fmtFloat(t.X)+`"`)
+	attrs = append(attrs, `y="`+fmtFloat(t.Y)+`"`)
 
 	if t.FontFamily != "" {
 		attrs = append(attrs, fmt.Sprintf(`font-family="%s"`, t.FontFamily))
 	}
 	if t.FontSize > 0 {
-		attrs = append(attrs, fmt.Sprintf(`font-size="%g"`, t.FontSize))
+		attrs = append(attrs, `font-size="`+fmtFloat(t.FontSize)+`"`)
 	}
 	if t.Fill != "" {
 		attrs = append(attrs, fmt.Sprintf(`fill="%s"`, t.Fill))
@@ -173,7 +187,7 @@ func (p *Path) Render() string {
 		attrs = append(attrs, fmt.Sprintf(`stroke="%s"`, p.Stroke))
 	}
 	if p.StrokeWidth > 0 {
-		attrs = append(attrs, fmt.Sprintf(`stroke-width="%g"`, p.StrokeWidth))
+		attrs = append(attrs, `stroke-width="`+fmtFloat(p.StrokeWidth)+`"`)
 	}
 	if p.Class != "" {
 		attrs = append(attrs, fmt.Sprintf(`class="%s"`, p.Class))
@@ -193,16 +207,16 @@ type Line struct {
 
 func (l *Line) Render() string {
 	var attrs []string
-	attrs = append(attrs, fmt.Sprintf(`x1="%g"`, l.X1))
-	attrs = append(attrs, fmt.Sprintf(`y1="%g"`, l.Y1))
-	attrs = append(attrs, fmt.Sprintf(`x2="%g"`, l.X2))
-	attrs = append(attrs, fmt.Sprintf(`y2="%g"`, l.Y2))
+	attrs = append(attrs, `x1="`+fmtFloat(l.X1)+`"`)
+	attrs = append(attrs, `y1="`+fmtFloat(l.Y1)+`"`)
+	attrs = append(attrs, `x2="`+fmtFloat(l.X2)+`"`)
+	attrs = append(attrs, `y2="`+fmtFloat(l.Y2)+`"`)
 
 	if l.Stroke != "" {
 		attrs = append(attrs, fmt.Sprintf(`stroke="%s"`, l.Stroke))
 	}
 	if l.StrokeWidth > 0 {
-		attrs = append(attrs, fmt.Sprintf(`stroke-width="%g"`, l.StrokeWidth))
+		attrs = append(attrs, `stroke-width="`+fmtFloat(l.StrokeWidth)+`"`)
 	}
 	if l.Class != "" {
 		attrs = append(attrs, fmt.Sprintf(`class="%s"`, l.Class))
@@ -234,10 +248,10 @@ func (s *SVG) Render() string {
 	attrs = append(attrs, `xmlns="http://www.w3.org/2000/svg"`)
 
 	if s.Width > 0 {
-		attrs = append(attrs, fmt.Sprintf(`width="%g"`, s.Width))
+		attrs = append(attrs, `width="`+fmtFloat(s.Width)+`"`)
 	}
 	if s.Height > 0 {
-		attrs = append(attrs, fmt.Sprintf(`height="%g"`, s.Height))
+		attrs = append(attrs, `height="`+fmtFloat(s.Height)+`"`)
 	}
 	if s.ViewBox != "" {
 		attrs = append(attrs, fmt.Sprintf(`viewBox="%s"`, s.ViewBox))

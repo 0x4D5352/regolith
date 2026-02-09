@@ -16,4 +16,4 @@
 		.quote { fill: #000; }
 		.subexp-label, .charset-label, .flags-label { font-size: 12px; font-style: italic; }
 		.repeat-label { fill: #666; font-size: 12px; }
-	</style><line x1="5" y1="22" x2="10" y2="22" stroke="#000" stroke-width="2"/><line x1="104" y1="22" x2="109" y2="22" stroke="#000" stroke-width="2"/><g transform="translate(10,10)"><g class="match"><g class="escape"><rect x="0" y="0" width="94" height="24" rx="3" ry="3"/><text x="47" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle">whitespace</text></g></g></g></svg>
+	</style><line x1="5" y1="22" x2="10" y2="22" stroke="#000" stroke-width="2"/><line x1="104" y1="22" x2="109" y2="22" stroke="#000" stroke-width="2"/><g transform="translate(10,10)"><g class="match"><g class="escape"><rect x="0" y="0" width="94" height="24" rx="3" ry="3"/><text x="47" y="16.6666666667" font-family="monospace" font-size="14" text-anchor="middle">whitespace</text></g></g></g></svg>

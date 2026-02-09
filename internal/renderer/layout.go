@@ -1,8 +1,8 @@
 package renderer
 
 import (
-	"fmt"
 	"math"
+	"strconv"
 )
 
 // BoundingBox represents the dimensions and anchor points of a rendered element
@@ -183,7 +183,7 @@ func wrapWithTransform(elem SVGElement, dx, dy float64) SVGElement {
 		return elem
 	}
 	return &Group{
-		Transform: fmt.Sprintf("translate(%g,%g)", dx, dy),
+		Transform: "translate(" + fmtFloat(dx) + "," + fmtFloat(dy) + ")",
 		Children:  []SVGElement{elem},
 	}
 }
@@ -205,37 +205,37 @@ func NewPathBuilder() *PathBuilder {
 
 // MoveTo adds a move command (M)
 func (pb *PathBuilder) MoveTo(x, y float64) *PathBuilder {
-	pb.commands = append(pb.commands, fmt.Sprintf("M %g %g", x, y))
+	pb.commands = append(pb.commands, "M "+fmtFloat(x)+" "+fmtFloat(y))
 	return pb
 }
 
 // LineTo adds a line command (L)
 func (pb *PathBuilder) LineTo(x, y float64) *PathBuilder {
-	pb.commands = append(pb.commands, fmt.Sprintf("L %g %g", x, y))
+	pb.commands = append(pb.commands, "L "+fmtFloat(x)+" "+fmtFloat(y))
 	return pb
 }
 
 // HorizontalTo adds a horizontal line command (H)
 func (pb *PathBuilder) HorizontalTo(x float64) *PathBuilder {
-	pb.commands = append(pb.commands, fmt.Sprintf("H %g", x))
+	pb.commands = append(pb.commands, "H "+fmtFloat(x))
 	return pb
 }
 
 // VerticalTo adds a vertical line command (V)
 func (pb *PathBuilder) VerticalTo(y float64) *PathBuilder {
-	pb.commands = append(pb.commands, fmt.Sprintf("V %g", y))
+	pb.commands = append(pb.commands, "V "+fmtFloat(y))
 	return pb
 }
 
 // QuadraticTo adds a quadratic bezier curve (Q)
 func (pb *PathBuilder) QuadraticTo(cx, cy, x, y float64) *PathBuilder {
-	pb.commands = append(pb.commands, fmt.Sprintf("Q %g %g %g %g", cx, cy, x, y))
+	pb.commands = append(pb.commands, "Q "+fmtFloat(cx)+" "+fmtFloat(cy)+" "+fmtFloat(x)+" "+fmtFloat(y))
 	return pb
 }
 
 // CubicTo adds a cubic bezier curve (C)
 func (pb *PathBuilder) CubicTo(c1x, c1y, c2x, c2y, x, y float64) *PathBuilder {
-	pb.commands = append(pb.commands, fmt.Sprintf("C %g %g %g %g %g %g", c1x, c1y, c2x, c2y, x, y))
+	pb.commands = append(pb.commands, "C "+fmtFloat(c1x)+" "+fmtFloat(c1y)+" "+fmtFloat(c2x)+" "+fmtFloat(c2y)+" "+fmtFloat(x)+" "+fmtFloat(y))
 	return pb
 }
 
@@ -248,13 +248,13 @@ func (pb *PathBuilder) ArcTo(rx, ry, rotation float64, largeArc, sweep bool, x, 
 	if sweep {
 		sw = 1
 	}
-	pb.commands = append(pb.commands, fmt.Sprintf("A %g %g %g %d %d %g %g", rx, ry, rotation, la, sw, x, y))
+	pb.commands = append(pb.commands, "A "+fmtFloat(rx)+" "+fmtFloat(ry)+" "+fmtFloat(rotation)+" "+strconv.Itoa(la)+" "+strconv.Itoa(sw)+" "+fmtFloat(x)+" "+fmtFloat(y))
 	return pb
 }
 
 // String returns the complete path data
 func (pb *PathBuilder) String() string {
-	return fmt.Sprintf("%s", joinPath(pb.commands))
+	return joinPath(pb.commands)
 }
 
 func joinPath(commands []string) string {

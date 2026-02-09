@@ -88,7 +88,7 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 
 	// Wrap the rendered content in a group with padding offset
 	contentGroup := &Group{
-		Transform: fmt.Sprintf("translate(%g,%g)", padding, bannerHeight+padding),
+		Transform: "translate(" + fmtFloat(padding) + "," + fmtFloat(bannerHeight+padding) + ")",
 		Children:  []SVGElement{rendered.Element},
 	}
 
@@ -101,7 +101,7 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 	// Add banner if present
 	if bannerElement != nil {
 		bannerGroup := &Group{
-			Transform: fmt.Sprintf("translate(%g,%g)", padding, padding/2),
+			Transform: "translate(" + fmtFloat(padding) + "," + fmtFloat(padding/2) + ")",
 			Children:  []SVGElement{bannerElement},
 		}
 		children = append(children, bannerGroup)
@@ -110,7 +110,7 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 	// Add flags if present
 	if flagsElement != nil {
 		flagsGroup := &Group{
-			Transform: fmt.Sprintf("translate(%g,%g)", width-padding-flagsWidth+padding/2, bannerHeight+padding),
+			Transform: "translate(" + fmtFloat(width-padding-flagsWidth+padding/2) + "," + fmtFloat(bannerHeight+padding) + ")",
 			Children:  []SVGElement{flagsElement},
 		}
 		children = append(children, flagsGroup)
@@ -119,7 +119,7 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 	svg := &SVG{
 		Width:   width,
 		Height:  height,
-		ViewBox: fmt.Sprintf("0 0 %g %g", width, height),
+		ViewBox: "0 0 " + fmtFloat(width) + " " + fmtFloat(height),
 		Style:   r.getStyles(),
 		Children: children,
 	}
@@ -195,11 +195,11 @@ func (r *Renderer) getStyles() string {
 		.conditional rect { fill: %s; }
 		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
 		.comment text { fill: #666; font-style: italic; }
-		text { font-family: %s; font-size: %gpx; fill: %s; }
+		text { font-family: %s; font-size: `+fmtFloat(r.Config.FontSize)+`px; fill: %s; }
 		.anchor text { fill: #fff; }
 		.quote { fill: #000; }
-		.subexp-label, .charset-label, .flags-label { font-size: %gpx; font-style: italic; }
-		.repeat-label { fill: %s; font-size: %gpx; }
+		.subexp-label, .charset-label, .flags-label { font-size: `+fmtFloat(r.Config.FontSize-2)+`px; font-style: italic; }
+		.repeat-label { fill: %s; font-size: `+fmtFloat(r.Config.FontSize-2)+`px; }
 	`,
 		r.Config.LiteralFill,
 		r.Config.EscapeFill,
@@ -212,11 +212,8 @@ func (r *Renderer) getStyles() string {
 		r.Config.BacktrackControlFill,
 		r.Config.ConditionalFill,
 		r.Config.FontFamily,
-		r.Config.FontSize,
 		r.Config.TextColor,
-		r.Config.FontSize-2,
 		r.Config.RepeatLabelColor,
-		r.Config.FontSize-2,
 	)
 }
 
@@ -715,10 +712,10 @@ func (r *Renderer) renderConditional(cond *parser.Conditional) RenderedNode {
 		totalWidth = max(yesBBox.Width, noBBox.Width)
 
 		// Position yes branch
-		yesGroup.Transform = fmt.Sprintf("translate(%.2f,0)", (totalWidth-yesBBox.Width)/2)
+		yesGroup.Transform = "translate(" + fmtFloat((totalWidth-yesBBox.Width)/2) + ",0)"
 
 		// Position no branch
-		noGroup.Transform = fmt.Sprintf("translate(%.2f,%.2f)", (totalWidth-noBBox.Width)/2, yesBBox.Height+verticalGap)
+		noGroup.Transform = "translate(" + fmtFloat((totalWidth-noBBox.Width)/2) + "," + fmtFloat(yesBBox.Height+verticalGap) + ")"
 
 		children = append(children, yesGroup, noGroup)
 	} else {
@@ -984,20 +981,18 @@ func (r *Renderer) renderWithRepeat(content RenderedNode, repeat *parser.Repeat)
 		if repeat.Greedy {
 			// Arrow pointing left (greedy - tries to match more first)
 			children = append(children, &Path{
-				D: fmt.Sprintf("M %g %g L %g %g L %g %g",
-					arrowX+arrowSize, arrowY-arrowSize,
-					arrowX, arrowY,
-					arrowX+arrowSize, arrowY+arrowSize),
+				D: "M " + fmtFloat(arrowX+arrowSize) + " " + fmtFloat(arrowY-arrowSize) +
+					" L " + fmtFloat(arrowX) + " " + fmtFloat(arrowY) +
+					" L " + fmtFloat(arrowX+arrowSize) + " " + fmtFloat(arrowY+arrowSize),
 				Stroke:      cfg.LineColor,
 				StrokeWidth: cfg.LineWidth,
 			})
 		} else {
 			// Arrow pointing right (non-greedy)
 			children = append(children, &Path{
-				D: fmt.Sprintf("M %g %g L %g %g L %g %g",
-					arrowX-arrowSize, arrowY-arrowSize,
-					arrowX, arrowY,
-					arrowX-arrowSize, arrowY+arrowSize),
+				D: "M " + fmtFloat(arrowX-arrowSize) + " " + fmtFloat(arrowY-arrowSize) +
+					" L " + fmtFloat(arrowX) + " " + fmtFloat(arrowY) +
+					" L " + fmtFloat(arrowX-arrowSize) + " " + fmtFloat(arrowY+arrowSize),
 				Stroke:      cfg.LineColor,
 				StrokeWidth: cfg.LineWidth,
 			})
@@ -1021,7 +1016,7 @@ func (r *Renderer) renderWithRepeat(content RenderedNode, repeat *parser.Repeat)
 
 	// Add content
 	contentGroup := &Group{
-		Transform: fmt.Sprintf("translate(%g,%g)", contentOffsetX, contentOffsetY),
+		Transform: "translate(" + fmtFloat(contentOffsetX) + "," + fmtFloat(contentOffsetY) + ")",
 		Children:  []SVGElement{content.Element},
 	}
 	children = append(children, contentGroup)
@@ -1189,7 +1184,7 @@ func (r *Renderer) renderRegexp(regexp *parser.Regexp) RenderedNode {
 	// Add all rendered items with offset
 	for _, item := range spacedItems {
 		itemGroup := &Group{
-			Transform: fmt.Sprintf("translate(%g,0)", connectorWidth),
+			Transform: "translate(" + fmtFloat(connectorWidth) + ",0)",
 			Children:  []SVGElement{item.Element},
 		}
 		children = append(children, itemGroup)
@@ -1557,7 +1552,7 @@ func (r *Renderer) renderSubexpBox(label string, content RenderedNode, fill stri
 	contentY := labelHeight
 
 	contentGroup := &Group{
-		Transform: fmt.Sprintf("translate(%g,%g)", contentX, contentY),
+		Transform: "translate(" + fmtFloat(contentX) + "," + fmtFloat(contentY) + ")",
 		Children:  []SVGElement{content.Element},
 	}
 	children = append(children, contentGroup)
@@ -1627,7 +1622,7 @@ func (r *Renderer) renderLabeledBoxWithContent(label string, content RenderedNod
 	contentY := labelHeight
 
 	contentGroup := &Group{
-		Transform: fmt.Sprintf("translate(%g,%g)", contentX, contentY),
+		Transform: "translate(" + fmtFloat(contentX) + "," + fmtFloat(contentY) + ")",
 		Children:  []SVGElement{content.Element},
 	}
 	children = append(children, contentGroup)
