@@ -32,8 +32,14 @@ MAC Address:
 ISO-8601 Date format:
 ![ISO 8601 Date regex, Java style](./assets/iso_8601.svg)
 
-PCRE Regex example:
+PCRE Compliant Regex:
 ![PCRE regex example with a callout, recurse, skip, and force fail](./assets/pcre_example.svg)
+
+Java Flavored Regex:
+![Java Regex example of case insensitive with unicode alphabetic and digits](./assets/java_example.svg)
+
+Color Customization:
+![regex for the string "hello" followed by multiple digits; 'hello' is red and digit is blue](./assets/color_customization.svg)
 
 ## Features
 
