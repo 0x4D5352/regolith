@@ -5,6 +5,10 @@
 		.anchor rect { fill: #6b6659; }
 		.any-character rect { fill: #dae9e5; }
 		.flags rect { fill: #c8e0f9; }
+		.recursive-ref rect { fill: #c9b3ff; }
+		.callout rect { fill: #ffd699; }
+		.backtrack-control rect { fill: #ffb3a7; }
+		.conditional rect { fill: #b3e5fc; }
 		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
 		.comment text { fill: #666; font-style: italic; }
 		text { font-family: monospace; font-size: 14px; fill: #000; }
@@ -12,4 +16,4 @@
 		.quote { fill: #000; }
 		.subexp-label, .charset-label, .flags-label { font-size: 12px; font-style: italic; }
 		.repeat-label { fill: #666; font-size: 12px; }
-	</style><line x1="5" y1="22" x2="10" y2="22" stroke="#000" stroke-width="2"/><line x1="160.8" y1="22" x2="165.8" y2="22" stroke="#000" stroke-width="2"/><g transform="translate(10,10)"><g class="match"><path d="M 68.8 12 L 78.8 12" fill="none" stroke="#000" stroke-width="2"/><g class="literal"><rect x="0" y="0" width="68.8" height="24" rx="3" ry="3"/><text x="34.4" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>hello</tspan><tspan class="quote">&#34;</tspan></text></g><g transform="translate(78.8,0)"><g class="repeat"><path d="M 72 12 Q 72 34 62 34 H 10 Q 0 34 0 12" fill="none" stroke="#000" stroke-width="2" class="loop-path"/><path d="M 41 29 L 36 34 L 41 39" fill="none" stroke="#000" stroke-width="2"/><g transform="translate(10,0)"><g class="escape"><rect x="0" y="0" width="52" height="24" rx="3" ry="3"/><text x="26" y="16.666666666666668" font-family="monospace" font-size="14" text-anchor="middle">digit</text></g></g><line x1="0" y1="12" x2="10" y2="12" stroke="#000" stroke-width="2"/><line x1="62" y1="12" x2="72" y2="12" stroke="#000" stroke-width="2"/></g></g></g></g></svg>
+	</style><line x1="5" y1="22" x2="10" y2="22" stroke="#000" stroke-width="2"/><line x1="160.8" y1="22" x2="165.8" y2="22" stroke="#000" stroke-width="2"/><g transform="translate(10,10)"><g class="match"><path d="M 68.8 12 L 78.8 12" fill="none" stroke="#000" stroke-width="2"/><g class="literal"><rect x="0" y="0" width="68.8" height="24" rx="3" ry="3"/><text x="34.4" y="16.6666666667" font-family="monospace" font-size="14" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>hello</tspan><tspan class="quote">&#34;</tspan></text></g><g transform="translate(78.8,0)"><g class="repeat"><path d="M 72 12 Q 72 34 62 34 H 10 Q 0 34 0 12" fill="none" stroke="#000" stroke-width="2" class="loop-path"/><path d="M 41 29 L 36 34 L 41 39" fill="none" stroke="#000" stroke-width="2"/><g transform="translate(10,0)"><g class="escape"><rect x="0" y="0" width="52" height="24" rx="3" ry="3"/><text x="26" y="16.6666666667" font-family="monospace" font-size="14" text-anchor="middle">digit</text></g></g><line x1="0" y1="12" x2="10" y2="12" stroke="#000" stroke-width="2"/><line x1="62" y1="12" x2="72" y2="12" stroke="#000" stroke-width="2"/></g></g></g></g></svg>
