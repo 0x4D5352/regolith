@@ -1,7 +1,7 @@
 .PHONY: build test clean generate install release all
 
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS := -ldflags "-X main.version=$(VERSION)"
+# VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+# LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 PIGEON := $(shell go env GOPATH)/bin/pigeon
 
 # Default target
@@ -9,11 +9,13 @@ all: generate build test
 
 # Build for current platform
 build:
-	go build $(LDFLAGS) ./cmd/regolith
+	# go build $(LDFLAGS) ./cmd/regolith
+	go build ./cmd/regolith
 
 # Install to GOPATH/bin
 install:
-	go install $(LDFLAGS) ./cmd/regolith
+	# go install $(LDFLAGS) ./cmd/regolith
+	go install ./cmd/regolith
 
 # Run tests
 test:
@@ -82,13 +84,18 @@ clean:
 release: clean
 	mkdir -p dist
 	# Linux
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/regolith-linux-amd64 ./cmd/regolith
-	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o dist/regolith-linux-arm64 ./cmd/regolith
+	# GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/regolith-linux-amd64 ./cmd/regolith
+	GOOS=linux GOARCH=amd64 go build -o dist/regolith-linux-amd64 ./cmd/regolith
+	# GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o dist/regolith-linux-arm64 ./cmd/regolith
+	GOOS=linux GOARCH=arm64 go build -o dist/regolith-linux-arm64 ./cmd/regolith
 	# macOS
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o dist/regolith-darwin-amd64 ./cmd/regolith
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/regolith-darwin-arm64 ./cmd/regolith
+	# GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o dist/regolith-darwin-amd64 ./cmd/regolith
+	GOOS=darwin GOARCH=amd64 go build -o dist/regolith-darwin-amd64 ./cmd/regolith
+	# GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/regolith-darwin-arm64 ./cmd/regolith
+	GOOS=darwin GOARCH=arm64 go build -o dist/regolith-darwin-arm64 ./cmd/regolith
 	# Windows
-	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/regolith-windows-amd64.exe ./cmd/regolith
+	# GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/regolith-windows-amd64.exe ./cmd/regolith
+	GOOS=windows GOARCH=amd64 go build -o dist/regolith-windows-amd64.exe ./cmd/regolith
 	# Create checksums
 	cd dist && shasum -a 256 * > checksums.txt
 
