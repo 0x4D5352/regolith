@@ -55,7 +55,7 @@ func TestRunFlavorFlag(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-flavor", "java", "-o", out, "[a-z]+"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--flavor", "java", "-o", out, "[a-z]+"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error with java flavor, got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -72,7 +72,7 @@ func TestRunAllFlavors(t *testing.T) {
 			out := filepath.Join(dir, "out.svg")
 
 			var stdout, stderr bytes.Buffer
-			err := run([]string{"regolith", "-flavor", name, "-o", out, "abc"}, nil, &stdout, &stderr)
+			err := run([]string{"regolith", "--flavor", name, "-o", out, "abc"}, nil, &stdout, &stderr)
 			if err != nil {
 				t.Fatalf("flavor %s failed on basic pattern: %v\nstderr: %s", name, err, stderr.String())
 			}
@@ -85,7 +85,7 @@ func TestRunUnknownFlavor(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-flavor", "bogus", "-o", out, "abc"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--flavor", "bogus", "-o", out, "abc"}, nil, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error for unknown flavor, got nil")
 	}
@@ -231,9 +231,9 @@ func TestRunCustomColors(t *testing.T) {
 	err := run([]string{
 		"regolith",
 		"-o", out,
-		"-text-color", "#fff",
-		"-line-color", "#333",
-		"-literal-fill", "#00ff00",
+		"--text-color", "#fff",
+		"--line-color", "#333",
+		"--literal-fill", "#00ff00",
 		"hello",
 	}, nil, &stdout, &stderr)
 	if err != nil {
@@ -355,7 +355,7 @@ func TestBinaryStdin(t *testing.T) {
 }
 
 func TestBinaryUnknownFlavor(t *testing.T) {
-	cmd := exec.Command(binaryPath, "-flavor", "bogus", "abc")
+	cmd := exec.Command(binaryPath, "--flavor", "bogus", "abc")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -375,7 +375,7 @@ func TestBinaryFlavorFlag(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	// Use PCRE-specific lookbehind syntax
-	cmd := exec.Command(binaryPath, "-flavor", "pcre", "-o", out, "(?<=foo)bar")
+	cmd := exec.Command(binaryPath, "--flavor", "pcre", "-o", out, "(?<=foo)bar")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("expected exit 0 for pcre flavor, got: %v\noutput: %s", err, output)
@@ -396,7 +396,7 @@ func TestRunUnescapeFlag(t *testing.T) {
 
 	// Pattern with double escapes + -unescape flag: should produce SVG, no warning
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-flavor", "java", "-unescape", "-o", out, `\\d+\\.\\d+`}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--flavor", "java", "--unescape", "-o", out, `\\d+\\.\\d+`}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error with -unescape, got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -416,12 +416,12 @@ func TestRunDoubleEscapeWarningJava(t *testing.T) {
 
 	// Java flavor with double escapes but no -unescape flag: should warn
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-flavor", "java", "-o", out, `\\d+`}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--flavor", "java", "-o", out, `\\d+`}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error (warning only), got: %v\nstderr: %s", err, stderr.String())
 	}
 
-	if !strings.Contains(stderr.String(), "-unescape") {
+	if !strings.Contains(stderr.String(), "--unescape") {
 		t.Errorf("expected warning mentioning -unescape, got: %s", stderr.String())
 	}
 }
@@ -432,12 +432,12 @@ func TestRunDoubleEscapeWarningDotnet(t *testing.T) {
 
 	// Dotnet flavor with double escapes but no -unescape flag: should warn
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-flavor", "dotnet", "-o", out, `\\d+`}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--flavor", "dotnet", "-o", out, `\\d+`}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error (warning only), got: %v\nstderr: %s", err, stderr.String())
 	}
 
-	if !strings.Contains(stderr.String(), "-unescape") {
+	if !strings.Contains(stderr.String(), "--unescape") {
 		t.Errorf("expected warning mentioning -unescape, got: %s", stderr.String())
 	}
 }
@@ -448,12 +448,12 @@ func TestRunNoWarningForJavaScript(t *testing.T) {
 
 	// JavaScript flavor with double escapes: no warning expected
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-flavor", "javascript", "-o", out, `\\d+`}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--flavor", "javascript", "-o", out, `\\d+`}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
 	}
 
-	if strings.Contains(stderr.String(), "-unescape") {
+	if strings.Contains(stderr.String(), "--unescape") {
 		t.Error("expected no warning for javascript flavor, but got one")
 	}
 }
@@ -464,13 +464,98 @@ func TestRunNoWarningWithoutDoubleEscapes(t *testing.T) {
 
 	// Java flavor without double escapes: no warning expected
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-flavor", "java", "-o", out, `\d+`}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--flavor", "java", "-o", out, `\d+`}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
 	}
 
-	if strings.Contains(stderr.String(), "-unescape") {
+	if strings.Contains(stderr.String(), "--unescape") {
 		t.Error("expected no warning without double escapes, but got one")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Interspersed flag tests (flags after positional args)
+// ---------------------------------------------------------------------------
+
+func TestRunFlagsAfterPattern(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "a|b|c", "--output", out}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error with flags after pattern, got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if _, err := os.Stat(out); os.IsNotExist(err) {
+		t.Fatalf("expected output at %s, file not found", out)
+	}
+}
+
+func TestRunMixedFlagPositions(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--flavor", "java", "[a-z]+", "--output", out}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error with mixed flag positions, got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if _, err := os.Stat(out); os.IsNotExist(err) {
+		t.Fatal("output file was not created with mixed flag positions")
+	}
+}
+
+func TestRunShortFlags(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "-o", out, "-f", "java", "[a-z]+"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error with short flags, got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if _, err := os.Stat(out); os.IsNotExist(err) {
+		t.Fatal("output file was not created with short flags")
+	}
+}
+
+func TestRunDoubleDashSeparator(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	var stdout, stderr bytes.Buffer
+	// Pattern starts with dash; use -- to separate it from flags
+	err := run([]string{"regolith", "--output", out, "--", "-abc"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error with -- separator, got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if _, err := os.Stat(out); os.IsNotExist(err) {
+		t.Fatal("output file was not created with -- separator")
+	}
+}
+
+func TestRunColorFlagsAfterPattern(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--output", out, "hello", "--literal-fill", "#ff0000"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error with color flags after pattern, got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+
+	if !strings.Contains(string(data), "#ff0000") {
+		t.Error("expected custom literal-fill color in SVG output")
 	}
 }
 
@@ -478,7 +563,7 @@ func TestBinaryUnescapeFlag(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.svg")
 
-	cmd := exec.Command(binaryPath, "-flavor", "java", "-unescape", "-o", out, `\\d+\\.\\d+`)
+	cmd := exec.Command(binaryPath, "--flavor", "java", "--unescape", "-o", out, `\\d+\\.\\d+`)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 

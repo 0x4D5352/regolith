@@ -2,11 +2,12 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+
+	flag "github.com/spf13/pflag"
 
 	"github.com/0x4d5352/regolith/internal/flavor"
 	"github.com/0x4d5352/regolith/internal/renderer"
@@ -43,13 +44,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 
 	// Basic flags
-	outputFile := fs.String("o", "regex.svg", "Output file path")
-	showVersion := fs.Bool("v", false, "Show version")
-	flavorName := fs.String("flavor", "javascript", "Regex flavor (javascript, java, dotnet, pcre, posix-bre, posix-ere, gnugrep, gnugrep-bre, gnugrep-ere)")
-	unescapeFlag := fs.Bool("unescape", false, `Apply string literal unescaping before parsing (e.g., \\ becomes \)`)
+	outputFile := fs.StringP("output", "o", "regex.svg", "Output file path")
+	showVersion := fs.BoolP("version", "v", false, "Show version")
+	flavorName := fs.StringP("flavor", "f", "javascript", "Regex flavor (javascript, java, dotnet, pcre, posix-bre, posix-ere, gnugrep, gnugrep-bre, gnugrep-ere)")
+	unescapeFlag := fs.BoolP("unescape", "u", false, `Apply string literal unescaping before parsing (e.g., \\ becomes \)`)
 
 	// Dimension flags
-	padding := fs.Float64("padding", 10, "Padding around diagram")
+	padding := fs.Float64P("padding", "p", 10, "Padding around diagram")
 	fontSize := fs.Float64("font-size", 14, "Font size in pixels")
 	lineWidth := fs.Float64("line-width", 2, "Stroke width for lines")
 
@@ -80,10 +81,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stderr, "\nExamples:\n")
 		fmt.Fprintf(stderr, "  regolith 'a|b|c'\n")
 		fmt.Fprintf(stderr, "  regolith -o output.svg '[a-z]+'\n")
-		fmt.Fprintf(stderr, "  regolith -flavor javascript '/pattern/gi'\n")
-		fmt.Fprintf(stderr, "  regolith -literal-fill '#ff0000' 'hello'\n")
+		fmt.Fprintf(stderr, "  regolith --flavor javascript '/pattern/gi'\n")
+		fmt.Fprintf(stderr, "  regolith --literal-fill '#ff0000' 'hello'\n")
 		fmt.Fprintf(stderr, "  echo '^hello$' | regolith\n")
-		fmt.Fprintf(stderr, "  regolith -flavor java -unescape '\\\\d+\\\\.\\\\d+'\n")
+		fmt.Fprintf(stderr, "  regolith -f java -u '\\\\d+\\\\.\\\\d+'\n")
 	}
 
 	err := fs.Parse(args[1:])
@@ -120,7 +121,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if *unescapeFlag {
 		pattern = unescape.JavaStringLiteral(pattern)
 	} else if (*flavorName == "java" || *flavorName == "dotnet") && unescape.ContainsDoubleEscapes(pattern) {
-		fmt.Fprintf(stderr, "Note: Pattern contains '\\\\' sequences. If copied from source code, use -unescape to apply string literal unescaping.\n")
+		fmt.Fprintf(stderr, "Note: Pattern contains '\\\\' sequences. If copied from source code, use --unescape to apply string literal unescaping.\n")
 	}
 
 	// Parse the pattern using the selected flavor
