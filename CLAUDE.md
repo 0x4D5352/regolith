@@ -57,7 +57,7 @@ Parse-then-render pipeline: PEG grammar -> AST -> SVG
    - `styles.go` - Configuration struct with colors, dimensions, fonts
 
 4. **CLI** (`cmd/regolith/main.go`):
-   - Flag parsing, stdin/arg input, `-flavor` flag for flavor selection, error display
+   - Flag parsing with pflag (POSIX/GNU-style `--flag` and `-f` shorthands), stdin/arg input, `--flavor` flag for flavor selection, error display
    - Blank-imports all flavor packages for side-effect registration
 
 5. **Legacy shim** (`internal/parser/`):

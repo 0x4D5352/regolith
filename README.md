@@ -91,37 +91,37 @@ echo '^hello$' | regolith
 
 ```bash
 # JavaScript (default) - supports /pattern/flags syntax
-regolith -flavor javascript '/pattern/gi'
+regolith --flavor javascript '/pattern/gi'
 
 # Java
-regolith -flavor java '(?i)\p{Alpha}+\d{2,}'
+regolith --flavor java '(?i)\p{Alpha}+\d{2,}'
 
 # .NET - balanced groups, variable-length lookbehind
-regolith -flavor dotnet '(?<open>\().*?(?<close-open>\))'
+regolith --flavor dotnet '(?<open>\().*?(?<close-open>\))'
 
 # PCRE - recursive patterns, callouts, backtracking control
-regolith -flavor pcre '(?R)|(?C1)\b\w+\b(*SKIP)(*FAIL)'
+regolith --flavor pcre '(?R)|(?C1)\b\w+\b(*SKIP)(*FAIL)'
 
 # POSIX BRE - uses \( \) for groups
-regolith -flavor posix-bre '\([[:alpha:]]\{2,\}\)'
+regolith --flavor posix-bre '\([[:alpha:]]\{2,\}\)'
 
 # POSIX ERE
-regolith -flavor posix-ere '([[:alpha:]]{2,})'
+regolith --flavor posix-ere '([[:alpha:]]{2,})'
 
 # GNU grep BRE (also available as just "gnugrep")
-regolith -flavor gnugrep-bre '\bword\b'
+regolith --flavor gnugrep-bre '\bword\b'
 
 # GNU grep ERE
-regolith -flavor gnugrep-ere '\b[[:digit:]]+\b'
+regolith --flavor gnugrep-ere '\b[[:digit:]]+\b'
 ```
 
 ### String Literal Unescaping
 
-When copying regex patterns from Java or .NET source code, backslashes are doubled. Use `-unescape` to handle this:
+When copying regex patterns from Java or .NET source code, backslashes are doubled. Use `--unescape` to handle this:
 
 ```bash
 # Pattern from Java source: "\\d+\\.\\d+"
-regolith -flavor java -unescape '\\d+\\.\\d+'
+regolith --flavor java --unescape '\\d+\\.\\d+'
 ```
 
 ### Customization
@@ -129,28 +129,28 @@ regolith -flavor java -unescape '\\d+\\.\\d+'
 #### Colors
 
 ```bash
-regolith -literal-fill '#ff6b6b' -escape-fill '#4ecdc4' 'hello\d+'
+regolith --literal-fill '#ff6b6b' -escape-fill '#4ecdc4' 'hello\d+'
 ```
 
 Available color flags:
-- `-text-color` - Text color (default: `#000`)
-- `-line-color` - Line/stroke color (default: `#000`)
-- `-literal-fill` - Literal box fill (default: `#ff6b6b`)
-- `-charset-fill` - Character set fill (default: `#cbcbba`)
-- `-escape-fill` - Escape sequence fill (default: `#bada55`)
-- `-anchor-fill` - Anchor box fill (default: `#6b6659`)
-- `-subexp-fill` - Outermost subexpression fill (default: `none`; nested groups cycle through distinct colors)
+- `--text-color` - Text color (default: `#000`)
+- `--line-color` - Line/stroke color (default: `#000`)
+- `--literal-fill` - Literal box fill (default: `#ff6b6b`)
+- `--charset-fill` - Character set fill (default: `#cbcbba`)
+- `--escape-fill` - Escape sequence fill (default: `#bada55`)
+- `--anchor-fill` - Anchor box fill (default: `#6b6659`)
+- `--subexp-fill` - Outermost subexpression fill (default: `none`; nested groups cycle through distinct colors)
 
 #### Dimensions
 
 ```bash
-regolith -padding 20 -font-size 16 -line-width 3 'pattern'
+regolith --padding 20 -font-size 16 -line-width 3 'pattern'
 ```
 
 Available dimension flags:
-- `-padding` - Padding around diagram (default: `10`)
-- `-font-size` - Font size in pixels (default: `14`)
-- `-line-width` - Stroke width for lines (default: `2`)
+- `--padding` - Padding around diagram (default: `10`)
+- `--font-size` - Font size in pixels (default: `14`)
+- `--line-width` - Stroke width for lines (default: `2`)
 
 ## Supported Features by Flavor
 
