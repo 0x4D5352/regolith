@@ -41,6 +41,9 @@ regex.svg
 # MacOS Garbage
 .DS_Store
 
+# Worktrees
+.worktrees/
+
 # Additional AI Steering Docs
 PLAN.md
 TODO.md
