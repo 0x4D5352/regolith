@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-regolith is a Go CLI tool that visualizes regular expressions as SVG railroad diagrams. It supports 8 regex flavors: JavaScript, Java, .NET, PCRE, POSIX BRE, POSIX ERE, GNU grep BRE, and GNU grep ERE. Each flavor has its own PEG grammar parsed via [pigeon](https://github.com/mna/pigeon), sharing a common AST and renderer.
+regolith is a Go CLI tool that visualizes regular expressions as SVG railroad diagrams, JSON AST dumps, and Markdown outlines. It supports 8 regex flavors: JavaScript, Java, .NET, PCRE, POSIX BRE, POSIX ERE, GNU grep BRE, and GNU grep ERE. Each flavor has its own PEG grammar parsed via [pigeon](https://github.com/mna/pigeon), sharing a common AST and renderer.
 
 ## Common Commands
 
@@ -25,6 +25,9 @@ make generate-javascript  # Regenerate a single flavor's parser
 make golden               # Shortcut
 GOLDEN_UPDATE=1 go test ./internal/renderer/...
 
+# Update output golden files (when intentionally changing JSON/Markdown output)
+GOLDEN_UPDATE=1 go test ./internal/output/...
+
 # Other
 make coverage             # Test with coverage report
 make lint                 # Requires golangci-lint
@@ -34,7 +37,7 @@ make install              # Install to GOPATH/bin
 
 ## Architecture
 
-Parse-then-render pipeline: PEG grammar -> AST -> SVG
+Parse-then-render pipeline: PEG grammar -> AST -> SVG / JSON / Markdown
 
 1. **AST** (`internal/ast/ast.go`):
    - Shared node types used by all flavors: `Regexp`, `Match`, `MatchFragment`, `Literal`, `AnyCharacter`, `Escape`, `Anchor`, `Charset`, `Subexp`, `Repeat`, `BackReference`, `Conditional`, `PatternOption`, `Callout`, `CharsetIntersection`, `CharsetSubtraction`, `CharsetStringDisjunction`, `UnicodePropertyEscape`
@@ -56,12 +59,19 @@ Parse-then-render pipeline: PEG grammar -> AST -> SVG
    - `layout.go` - Bounding box calculations, `SpaceHorizontally()`, `SpaceVertically()`
    - `styles.go` - Configuration struct with colors, dimensions, fonts
 
-4. **CLI** (`cmd/regolith/main.go`):
-   - Flag parsing with pflag (POSIX/GNU-style `--flag` and `-f` shorthands), stdin/arg input, `--flavor` flag for flavor selection, error display
+4. **Output formats** (`internal/output/`):
+   - `json.go` - AST-to-JSON translation with stable consumer-friendly schema (discriminated union via `type` field)
+   - `markdown.go` - AST-to-Markdown nested bullet list for human-readable output
+   - Golden tests in `internal/output/testdata/golden/{json,markdown}/`
+
+5. **CLI** (`cmd/regolith/main.go`):
+   - Flag parsing with pflag; `--flavor` for flavor selection, `--format` for output format (svg/json/markdown, default svg)
+   - JSON/Markdown write to stdout; SVG writes to file via `--output`
    - Blank-imports all flavor packages for side-effect registration
 
-5. **Legacy shim** (`internal/parser/`):
+6. **Legacy shim** (`internal/parser/`):
    - `ParseRegex()` delegates to JavaScript flavor for backward compatibility
+   - Type aliases (`parser.Regexp = ast.Regexp` etc.) — `*ast.Regexp` and `*parser.Regexp` are interchangeable
 
 ## Key Patterns
 
@@ -79,6 +89,7 @@ Parse-then-render pipeline: PEG grammar -> AST -> SVG
   - Newer flavors (Java, .NET, PCRE, GNU grep): strict - error if golden file missing, require `GOLDEN_UPDATE=1` to update
   - Older flavors (POSIX BRE/ERE, base JS): lenient - auto-create missing golden files
 - Integration tests in `internal/renderer/integration_test.go` using `validateSVG()` helper
+- Output format golden tests in `internal/output/testdata/golden/{json,markdown}/` (strict, `GOLDEN_UPDATE=1`)
 
 ## Gotchas
 
@@ -86,3 +97,5 @@ Parse-then-render pipeline: PEG grammar -> AST -> SVG
 - **Pigeon PEG quirks**: multi-character string predicates need double quotes (`!"&&"` not `!'&&'`); inside `[...]` only `\]`, `\\`, `\n`, `\r`, `\t` are valid escapes (`\[` is NOT valid).
 - **Conditional `|` parsing**: In `(?(cond)yes|no)`, the `|` separates branches, not alternation. Grammar must use `Match` (not `Regexp`) for branches.
 - **GNUGrepBRE** has unexported `name` field - use `flavor.Get("gnugrep-bre")` instead of direct struct instantiation.
+- **`-f` shorthand is taken** by `--flavor` — new flags needing `-f` must use long form only.
+- **`internal/parser/` is type aliases** — `parser.Regexp` and `ast.Regexp` are the same type. New code should import `internal/ast` directly.

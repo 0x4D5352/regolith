@@ -1,6 +1,6 @@
 # regolith
 
-A command-line tool for visualizing regular expressions as SVG railroad diagrams.
+A command-line tool for visualizing regular expressions.
 
 ![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)
 
@@ -44,6 +44,7 @@ Color Customization:
 ## Features
 
 - Visualize regex patterns as clean SVG railroad diagrams
+- **3 output formats**: SVG (visual), JSON (machine-readable), Markdown (human-readable)
 - **8 regex flavors** with dedicated PEG grammars:
   - **JavaScript** (ECMAScript 2018+) - including `v` flag unicode sets
   - **Java** (`java.util.regex.Pattern`)
@@ -85,6 +86,23 @@ regolith -o output.svg '[a-z]+'
 
 # Read pattern from stdin
 echo '^hello$' | regolith
+```
+
+### Output Formats
+
+```bash
+# SVG railroad diagram (default) - writes to file
+regolith 'a|b|c'
+regolith -o output.svg '[a-z]+'
+
+# JSON AST dump - writes to stdout, pipe to jq
+regolith --format json 'foo([a-z]+)' | jq .
+
+# Markdown outline - writes to stdout, pipe to glow
+regolith --format markdown '^hello$' | glow -
+
+# Combine with stdin and flavors
+echo '[a-z]+' | regolith --format json --flavor pcre
 ```
 
 ### Selecting a Flavor
@@ -221,6 +239,12 @@ make golden
 GOLDEN_UPDATE=1 go test ./internal/renderer/...
 ```
 
+When intentionally changing JSON or Markdown output:
+
+```bash
+GOLDEN_UPDATE=1 go test ./internal/output/...
+```
+
 ### Project Structure
 
 ```
@@ -244,6 +268,10 @@ regolith/
 │   │   ├── posix_ere/
 │   │   ├── gnugrep_bre/
 │   │   └── gnugrep_ere/
+│   ├── output/                # Text output formats
+│   │   ├── json.go            #   AST-to-JSON translation
+│   │   ├── markdown.go        #   AST-to-Markdown outline
+│   │   └── testdata/golden/   #   Golden test files (JSON + Markdown)
 │   ├── renderer/              # SVG rendering
 │   │   ├── renderer.go        #   AST-to-SVG dispatch
 │   │   ├── svg.go             #   SVG element types
@@ -257,12 +285,14 @@ regolith/
 
 ## Architecture
 
-regolith uses a parse-then-render pipeline: **PEG grammar -> AST -> SVG**.
+regolith uses a parse-then-render pipeline: **PEG grammar -> AST -> SVG / JSON / Markdown**.
 
 1. Each regex flavor defines a PEG grammar that produces a shared AST
 2. Flavors register themselves via `init()` and are discovered through a central registry
-3. The renderer walks the AST and produces SVG elements with bounding box calculations
-4. Layout uses anchor points to connect elements with railroad-style paths
+3. The `--format` flag selects the output backend:
+   - **SVG** — renderer walks the AST and produces SVG elements with bounding box calculations and railroad-style paths
+   - **JSON** — structured dump with a stable consumer-friendly schema (discriminated union via `type` field)
+   - **Markdown** — nested bullet list describing the regex structure in human-readable form
 
 ## License
 
