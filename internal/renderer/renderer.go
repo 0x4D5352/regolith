@@ -644,11 +644,12 @@ func (r *Renderer) renderConditional(cond *parser.Conditional) RenderedNode {
 			condLabel = fmt.Sprintf("if group %d matched", -c.Number)
 		}
 	case *parser.RecursiveRef:
-		if c.Target == "R" {
+		switch c.Target {
+		case "R":
 			condLabel = "if in recursion"
-		} else if c.Target == "DEFINE" || c.Target == "" {
+		case "DEFINE", "":
 			condLabel = "DEFINE"
-		} else {
+		default:
 			condLabel = fmt.Sprintf("if in recursion to '%s'", c.Target)
 		}
 	case *parser.Literal:
@@ -1072,11 +1073,12 @@ func (r *Renderer) getRepeatLabel(repeat *parser.Repeat) string {
 			label = fmt.Sprintf("%d times", repeat.Min)
 		}
 	} else if repeat.Max == -1 {
-		if repeat.Min == 0 {
+		switch repeat.Min {
+		case 0:
 			label = "" // * quantifier - no label needed
-		} else if repeat.Min == 1 {
+		case 1:
 			label = "" // + quantifier - no label needed
-		} else {
+		default:
 			label = fmt.Sprintf("%d+ times", repeat.Min)
 		}
 	} else {

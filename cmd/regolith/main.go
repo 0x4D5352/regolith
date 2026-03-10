@@ -67,29 +67,29 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	// Custom usage message
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "regolith - Visualize regular expressions as SVG diagrams\n\n")
-		fmt.Fprintf(stderr, "Usage:\n")
-		fmt.Fprintf(stderr, "  regolith [flags] <pattern>\n")
-		fmt.Fprintf(stderr, "  echo 'pattern' | regolith [flags]\n\n")
-		fmt.Fprintf(stderr, "Arguments:\n")
-		fmt.Fprintf(stderr, "  pattern    Regular expression to visualize (reads from stdin if omitted)\n\n")
-		fmt.Fprintf(stderr, "Flags:\n")
+		_, _ = fmt.Fprintf(stderr, "regolith - Visualize regular expressions as SVG diagrams\n\n")
+		_, _ = fmt.Fprintf(stderr, "Usage:\n")
+		_, _ = fmt.Fprintf(stderr, "  regolith [flags] <pattern>\n")
+		_, _ = fmt.Fprintf(stderr, "  echo 'pattern' | regolith [flags]\n\n")
+		_, _ = fmt.Fprintf(stderr, "Arguments:\n")
+		_, _ = fmt.Fprintf(stderr, "  pattern    Regular expression to visualize (reads from stdin if omitted)\n\n")
+		_, _ = fmt.Fprintf(stderr, "Flags:\n")
 		fs.PrintDefaults()
-		fmt.Fprintf(stderr, "\nAvailable flavors:\n")
+		_, _ = fmt.Fprintf(stderr, "\nAvailable flavors:\n")
 		for _, name := range flavor.List() {
 			f, _ := flavor.Get(name)
-			fmt.Fprintf(stderr, "  %-12s %s\n", name, f.Description())
+			_, _ = fmt.Fprintf(stderr, "  %-12s %s\n", name, f.Description())
 		}
-		fmt.Fprintf(stderr, "\nExamples:\n")
-		fmt.Fprintf(stderr, "  regolith 'a|b|c'\n")
-		fmt.Fprintf(stderr, "  regolith -o output.svg '[a-z]+'\n")
-		fmt.Fprintf(stderr, "  regolith --flavor javascript '/pattern/gi'\n")
-		fmt.Fprintf(stderr, "  regolith --literal-fill '#ff0000' 'hello'\n")
-		fmt.Fprintf(stderr, "  echo '^hello$' | regolith\n")
-		fmt.Fprintf(stderr, "  regolith -f java -u '\\\\d+\\\\.\\\\d+'\n")
-		fmt.Fprintf(stderr, "\n  regolith --format json 'foo([a-z]+)' | jq .\n")
-		fmt.Fprintf(stderr, "  regolith --format markdown '^hello$' | glow -\n")
-		fmt.Fprintf(stderr, "  echo '[a-z]+' | regolith --format json\n")
+		_, _ = fmt.Fprintf(stderr, "\nExamples:\n")
+		_, _ = fmt.Fprintf(stderr, "  regolith 'a|b|c'\n")
+		_, _ = fmt.Fprintf(stderr, "  regolith -o output.svg '[a-z]+'\n")
+		_, _ = fmt.Fprintf(stderr, "  regolith --flavor javascript '/pattern/gi'\n")
+		_, _ = fmt.Fprintf(stderr, "  regolith --literal-fill '#ff0000' 'hello'\n")
+		_, _ = fmt.Fprintf(stderr, "  echo '^hello$' | regolith\n")
+		_, _ = fmt.Fprintf(stderr, "  regolith -f java -u '\\\\d+\\\\.\\\\d+'\n")
+		_, _ = fmt.Fprintf(stderr, "\n  regolith --format json 'foo([a-z]+)' | jq .\n")
+		_, _ = fmt.Fprintf(stderr, "  regolith --format markdown '^hello$' | glow -\n")
+		_, _ = fmt.Fprintf(stderr, "  echo '[a-z]+' | regolith --format json\n")
 	}
 
 	err := fs.Parse(args[1:])
@@ -102,22 +102,22 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 
 	if *showVersion {
-		fmt.Fprintf(stdout, "regolith version %s\n", version)
+		_, _ = fmt.Fprintf(stdout, "regolith version %s\n", version)
 		return nil
 	}
 
 	// Get the flavor
 	f, ok := flavor.Get(*flavorName)
 	if !ok {
-		fmt.Fprintf(stderr, "Error: unknown flavor '%s'\n", *flavorName)
-		fmt.Fprintf(stderr, "Available flavors: %s\n", strings.Join(flavor.List(), ", "))
+		_, _ = fmt.Fprintf(stderr, "Error: unknown flavor '%s'\n", *flavorName)
+		_, _ = fmt.Fprintf(stderr, "Available flavors: %s\n", strings.Join(flavor.List(), ", "))
 		return fmt.Errorf("unknown flavor: %s", *flavorName)
 	}
 
 	// Get input pattern
 	pattern, err := getInput(fs.Args(), stdin)
 	if err != nil {
-		fmt.Fprintf(stderr, "Error: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
 		fs.Usage()
 		return err
 	}
@@ -126,7 +126,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if *unescapeFlag {
 		pattern = unescape.JavaStringLiteral(pattern)
 	} else if (*flavorName == "java" || *flavorName == "dotnet") && unescape.ContainsDoubleEscapes(pattern) {
-		fmt.Fprintf(stderr, "Note: Pattern contains '\\\\' sequences. If copied from source code, use --unescape to apply string literal unescaping.\n")
+		_, _ = fmt.Fprintf(stderr, "Note: Pattern contains '\\\\' sequences. If copied from source code, use --unescape to apply string literal unescaping.\n")
 	}
 
 	// Parse the pattern using the selected flavor
@@ -157,25 +157,25 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 		err = os.WriteFile(*outputFile, []byte(svg), 0644)
 		if err != nil {
-			fmt.Fprintf(stderr, "Error writing output file: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error writing output file: %v\n", err)
 			return fmt.Errorf("writing output: %w", err)
 		}
-		fmt.Fprintf(stdout, "Wrote %s\n", *outputFile)
+		_, _ = fmt.Fprintf(stdout, "Wrote %s\n", *outputFile)
 
 	case "json":
 		out, err := output.RenderJSON(parsedAST, pattern, f.Name())
 		if err != nil {
-			fmt.Fprintf(stderr, "Error rendering JSON: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error rendering JSON: %v\n", err)
 			return fmt.Errorf("json render: %w", err)
 		}
-		fmt.Fprintln(stdout, out)
+		_, _ = fmt.Fprintln(stdout, out)
 
 	case "markdown":
 		out := output.RenderMarkdown(parsedAST, pattern, f.Name())
-		fmt.Fprint(stdout, out)
+		_, _ = fmt.Fprint(stdout, out)
 
 	default:
-		fmt.Fprintf(stderr, "Error: unknown format %q\nAvailable: svg, json, markdown\n", *formatName)
+		_, _ = fmt.Fprintf(stderr, "Error: unknown format %q\nAvailable: svg, json, markdown\n", *formatName)
 		return fmt.Errorf("unknown format: %s", *formatName)
 	}
 
@@ -235,17 +235,17 @@ func displayParseError(w io.Writer, pattern string, err error) {
 		}
 	}
 
-	fmt.Fprintf(w, "Error parsing pattern:\n\n")
-	fmt.Fprintf(w, "  %s\n", pattern)
+	_, _ = fmt.Fprintf(w, "Error parsing pattern:\n\n")
+	_, _ = fmt.Fprintf(w, "  %s\n", pattern)
 
 	// Show position indicator if we have column info
 	if col > 0 && col <= len(pattern) {
-		fmt.Fprintf(w, "  %s^\n", strings.Repeat(" ", col-1))
+		_, _ = fmt.Fprintf(w, "  %s^\n", strings.Repeat(" ", col-1))
 	}
 
 	if msg != "" {
-		fmt.Fprintf(w, "\n%s\n", msg)
+		_, _ = fmt.Fprintf(w, "\n%s\n", msg)
 	} else {
-		fmt.Fprintf(w, "\n%s\n", errStr)
+		_, _ = fmt.Fprintf(w, "\n%s\n", errStr)
 	}
 }

@@ -259,7 +259,7 @@ func (s *SVG) Render() string {
 
 	var children strings.Builder
 	if s.Style != "" {
-		children.WriteString(fmt.Sprintf("<style>%s</style>", s.Style))
+		fmt.Fprintf(&children, "<style>%s</style>", s.Style)
 	}
 	for _, child := range s.Children {
 		children.WriteString(child.Render())
