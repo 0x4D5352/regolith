@@ -3,11 +3,7 @@
 **Flavor:** JavaScript
 
 - **Sequence**
-  - Literal `a`
-  - Quantifier: 0 or more (greedy)
-  - Literal `b`
-  - Quantifier: 1 or more (greedy)
-  - Literal `c`
-  - Quantifier: optional (greedy)
-  - Literal `d`
-  - Quantifier: 2 to 5 times (greedy)
+  - Matches `a` literally, 0 or more times (greedy)
+  - Matches `b` literally, 1 or more times (greedy)
+  - Matches `c` literally, optionally
+  - Matches `d` literally, 2 to 5 times (greedy)

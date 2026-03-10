@@ -24,8 +24,8 @@ type Config struct {
 	CharsetFill          string
 	EscapeFill           string
 	AnchorFill           string
-	SubexpFill           string // Used for outermost subexp (depth 0)
-	SubexpStroke         string // Stroke color for subexp boxes
+	SubexpFill           string   // Used for outermost subexp (depth 0)
+	SubexpStroke         string   // Stroke color for subexp boxes
 	SubexpColors         []string // Colors to cycle through for nested subexps (depth 1+)
 	AnyCharFill          string
 	FlagsFill            string

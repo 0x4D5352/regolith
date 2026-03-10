@@ -545,10 +545,10 @@ func TestParseBracedUnicodeEscape(t *testing.T) {
 		escapeType string
 		code       string
 	}{
-		{`\u{1F600}`, "unicode_braced", `\u{1F600}`},     // Emoji (grinning face)
-		{`\u{0041}`, "unicode_braced", `\u{0041}`},       // ASCII 'A'
-		{`\u{10FFFF}`, "unicode_braced", `\u{10FFFF}`},   // Max code point
-		{`\u{A}`, "unicode_braced", `\u{A}`},             // Single hex digit
+		{`\u{1F600}`, "unicode_braced", `\u{1F600}`},   // Emoji (grinning face)
+		{`\u{0041}`, "unicode_braced", `\u{0041}`},     // ASCII 'A'
+		{`\u{10FFFF}`, "unicode_braced", `\u{10FFFF}`}, // Max code point
+		{`\u{A}`, "unicode_braced", `\u{A}`},           // Single hex digit
 	}
 
 	for _, tc := range tests {

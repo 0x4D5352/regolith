@@ -52,16 +52,16 @@ func (a *Anchor) Type() string { return "anchor" }
 
 // Anchor type constants
 const (
-	AnchorStart           = "start"             // ^
-	AnchorEnd             = "end"               // $
-	AnchorWordBoundary    = "word_boundary"     // \b
-	AnchorNonWordBoundary = "non_word_boundary" // \B
-	AnchorStringStart     = "string_start"      // \A
-	AnchorStringEnd       = "string_end"        // \Z (before final newline)
-	AnchorAbsoluteEnd     = "absolute_end"      // \z (absolute end)
-	AnchorWordStart                  = "word_start"                  // \< (GNU)
-	AnchorWordEnd                    = "word_end"                    // \> (GNU)
-	AnchorGraphemeClusterBoundary    = "grapheme_cluster_boundary"   // \b{g} (Java)
+	AnchorStart                   = "start"                     // ^
+	AnchorEnd                     = "end"                       // $
+	AnchorWordBoundary            = "word_boundary"             // \b
+	AnchorNonWordBoundary         = "non_word_boundary"         // \B
+	AnchorStringStart             = "string_start"              // \A
+	AnchorStringEnd               = "string_end"                // \Z (before final newline)
+	AnchorAbsoluteEnd             = "absolute_end"              // \z (absolute end)
+	AnchorWordStart               = "word_start"                // \< (GNU)
+	AnchorWordEnd                 = "word_end"                  // \> (GNU)
+	AnchorGraphemeClusterBoundary = "grapheme_cluster_boundary" // \b{g} (Java)
 )
 
 // Subexp represents a group: (), (?:), (?=), (?!), (?<=), (?<!), (?<name>)
@@ -76,21 +76,21 @@ func (s *Subexp) Type() string { return "subexp" }
 
 // Group type constants
 const (
-	GroupCapture           = "capture"
-	GroupNonCapture        = "non_capture"
-	GroupPositiveLookahead = "positive_lookahead"
-	GroupNegativeLookahead = "negative_lookahead"
+	GroupCapture            = "capture"
+	GroupNonCapture         = "non_capture"
+	GroupPositiveLookahead  = "positive_lookahead"
+	GroupNegativeLookahead  = "negative_lookahead"
 	GroupPositiveLookbehind = "positive_lookbehind"
 	GroupNegativeLookbehind = "negative_lookbehind"
-	GroupNamedCapture      = "named_capture"
-	GroupAtomic            = "atomic"
+	GroupNamedCapture       = "named_capture"
+	GroupAtomic             = "atomic"
 )
 
 // Repeat represents quantifiers: *, +, ?, {n}, {n,}, {n,m}
 type Repeat struct {
-	Min       int  // Minimum repetitions
-	Max       int  // Maximum repetitions (-1 for unbounded)
-	Greedy    bool // true if greedy, false if non-greedy (has trailing ?)
+	Min        int  // Minimum repetitions
+	Max        int  // Maximum repetitions (-1 for unbounded)
+	Greedy     bool // true if greedy, false if non-greedy (has trailing ?)
 	Possessive bool // true for possessive quantifiers like *+, ++, ?+ (PCRE/Java)
 }
 
@@ -264,8 +264,8 @@ func (ql *QuotedLiteral) Type() string { return "quoted_literal" }
 // InlineModifier represents inline flag modifiers like (?i), (?m), (?s)
 // Used in: PCRE, Java, .NET
 type InlineModifier struct {
-	Enable  string // Flags to enable (e.g., "im")
-	Disable string // Flags to disable (e.g., "s")
+	Enable  string  // Flags to enable (e.g., "im")
+	Disable string  // Flags to disable (e.g., "s")
 	Regexp  *Regexp // Optional: scoped modifier (?i:...)
 }
 

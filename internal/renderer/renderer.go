@@ -117,10 +117,10 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 	}
 
 	svg := &SVG{
-		Width:   width,
-		Height:  height,
-		ViewBox: "0 0 " + fmtFloat(width) + " " + fmtFloat(height),
-		Style:   r.getStyles(),
+		Width:    width,
+		Height:   height,
+		ViewBox:  "0 0 " + fmtFloat(width) + " " + fmtFloat(height),
+		Style:    r.getStyles(),
 		Children: children,
 	}
 
@@ -916,8 +916,8 @@ func (r *Renderer) renderWithRepeat(content RenderedNode, repeat *parser.Repeat)
 	cfg := r.Config
 	curveRadius := 10.0
 
-	hasSkip := repeat.Min == 0  // Optional: can skip content
-	hasLoop := repeat.Max != 1  // Can repeat: show loop
+	hasSkip := repeat.Min == 0 // Optional: can skip content
+	hasLoop := repeat.Max != 1 // Can repeat: show loop
 
 	// Calculate extra space needed for skip/loop
 	skipHeight := 0.0

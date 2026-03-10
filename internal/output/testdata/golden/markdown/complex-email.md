@@ -3,26 +3,18 @@
 **Flavor:** JavaScript
 
 - **Sequence**
-  - **Character class**: one of
-    - Range `a` to `z`
-    - Range `A` to `Z`
-    - Range `0` to `9`
-    - `.`
-    - `_`
-    - `%`
-    - `+`
-    - `-`
-  - Quantifier: 1 or more (greedy)
-  - Literal `@`
-  - **Character class**: one of
-    - Range `a` to `z`
-    - Range `A` to `Z`
-    - Range `0` to `9`
-    - `.`
-    - `-`
-  - Quantifier: 1 or more (greedy)
-  - Literal `.`
-  - **Character class**: one of
-    - Range `a` to `z`
-    - Range `A` to `Z`
-  - Quantifier: 2 or more (greedy)
+  - Matches one of the following, 1 or more times (greedy):
+    - `a` to `z` (lowercase letters)
+    - `A` to `Z` (uppercase letters)
+    - `0` to `9` (digits)
+    - `.`, `_`, `%`, `+`, `-` (literal characters)
+  - Matches `@` literally
+  - Matches one of the following, 1 or more times (greedy):
+    - `a` to `z` (lowercase letters)
+    - `A` to `Z` (uppercase letters)
+    - `0` to `9` (digits)
+    - `.`, `-` (literal characters)
+  - Matches `.` literally
+  - Matches one of the following, 2 or more times (greedy):
+    - `a` to `z` (lowercase letters)
+    - `A` to `Z` (uppercase letters)

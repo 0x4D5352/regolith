@@ -373,8 +373,8 @@ func TestPOSIXBREParseBackReferences(t *testing.T) {
 	bre := &POSIXBRE{}
 
 	tests := []struct {
-		pattern      string
-		backRefNums  []int
+		pattern     string
+		backRefNums []int
 	}{
 		{`\(a\)\1`, []int{1}},
 		{`\(a\)\(b\)\1\2`, []int{1, 2}},
@@ -416,12 +416,12 @@ func TestPOSIXBRELiteralMetacharacters(t *testing.T) {
 		pattern  string
 		expected string
 	}{
-		{"a+b", "a+b"},           // + is literal
-		{"a?b", "a?b"},           // ? is literal
-		{"a|b", "a|b"},           // | is literal
-		{"(abc)", "(abc)"},       // () are literal
-		{"a{2}", "a{2}"},         // {} are literal
-		{"a{2,3}", "a{2,3}"},     // {} are literal
+		{"a+b", "a+b"},       // + is literal
+		{"a?b", "a?b"},       // ? is literal
+		{"a|b", "a|b"},       // | is literal
+		{"(abc)", "(abc)"},   // () are literal
+		{"a{2}", "a{2}"},     // {} are literal
+		{"a{2,3}", "a{2,3}"}, // {} are literal
 	}
 
 	for _, tc := range tests {

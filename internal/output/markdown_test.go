@@ -55,8 +55,8 @@ func TestRenderMarkdown_Literal(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "foo", "javascript")
-	if !strings.Contains(got, "- Literal `foo`") {
-		t.Errorf("expected Literal `foo`, got:\n%s", got)
+	if !strings.Contains(got, "Matches `foo` literally") {
+		t.Errorf("expected Matches `foo` literally, got:\n%s", got)
 	}
 }
 
@@ -69,8 +69,8 @@ func TestRenderMarkdown_EmptyLiteral(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "", "javascript")
-	if !strings.Contains(got, "- Literal ``") {
-		t.Errorf("expected Literal ``, got:\n%s", got)
+	if !strings.Contains(got, "Matches `` literally") {
+		t.Errorf("expected Matches `` literally, got:\n%s", got)
 	}
 }
 
@@ -83,8 +83,8 @@ func TestRenderMarkdown_AnyCharacter(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, ".", "javascript")
-	if !strings.Contains(got, "- Any character") {
-		t.Errorf("expected Any character, got:\n%s", got)
+	if !strings.Contains(got, "Matches any character") {
+		t.Errorf("expected Matches any character, got:\n%s", got)
 	}
 }
 
@@ -93,16 +93,16 @@ func TestRenderMarkdown_AllAnchors(t *testing.T) {
 		anchorType string
 		want       string
 	}{
-		{ast.AnchorStart, "Start of line"},
-		{ast.AnchorEnd, "End of line"},
-		{ast.AnchorWordBoundary, "Word boundary"},
-		{ast.AnchorNonWordBoundary, "Non-word boundary"},
-		{ast.AnchorStringStart, "Start of string"},
-		{ast.AnchorStringEnd, "End of string"},
-		{ast.AnchorAbsoluteEnd, "Absolute end of string"},
-		{ast.AnchorWordStart, "Start of word"},
-		{ast.AnchorWordEnd, "End of word"},
-		{ast.AnchorGraphemeClusterBoundary, "Grapheme cluster boundary"},
+		{ast.AnchorStart, "Asserts start of line"},
+		{ast.AnchorEnd, "Asserts end of line"},
+		{ast.AnchorWordBoundary, "Asserts word boundary"},
+		{ast.AnchorNonWordBoundary, "Asserts non-word boundary"},
+		{ast.AnchorStringStart, "Asserts start of string"},
+		{ast.AnchorStringEnd, "Asserts end of string"},
+		{ast.AnchorAbsoluteEnd, "Asserts absolute end of string"},
+		{ast.AnchorWordStart, "Asserts start of word"},
+		{ast.AnchorWordEnd, "Asserts end of word"},
+		{ast.AnchorGraphemeClusterBoundary, "Asserts grapheme cluster boundary"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.anchorType, func(t *testing.T) {
@@ -130,8 +130,8 @@ func TestRenderMarkdown_Escape(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, `\d`, "javascript")
-	if !strings.Contains(got, "- Escape: digit (0-9)") {
-		t.Errorf("expected Escape: digit (0-9), got:\n%s", got)
+	if !strings.Contains(got, "Matches any digit `\\d` (0-9)") {
+		t.Errorf("expected escape description, got:\n%s", got)
 	}
 }
 
@@ -150,11 +150,11 @@ func TestRenderMarkdown_Charset(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "[a-z0]", "javascript")
-	if !strings.Contains(got, "**Character class**: one of") {
+	if !strings.Contains(got, "Matches one of the following:") {
 		t.Errorf("expected character class header, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Range `a` to `z`") {
-		t.Errorf("expected range, got:\n%s", got)
+	if !strings.Contains(got, "`a` to `z` (lowercase letters)") {
+		t.Errorf("expected range with description, got:\n%s", got)
 	}
 	if !strings.Contains(got, "`0`") {
 		t.Errorf("expected charset literal, got:\n%s", got)
@@ -175,7 +175,7 @@ func TestRenderMarkdown_NegatedCharset(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "[^x]", "javascript")
-	if !strings.Contains(got, "**Negated character class**: none of") {
+	if !strings.Contains(got, "Matches any character NOT in:") {
 		t.Errorf("expected negated class header, got:\n%s", got)
 	}
 }
@@ -196,7 +196,7 @@ func TestRenderMarkdown_CharsetWithSetExpression(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "[[a]&&[b]]", "javascript")
-	if !strings.Contains(got, "**Character class**: one of") {
+	if !strings.Contains(got, "Matches one of the following:") {
 		t.Errorf("expected character class header, got:\n%s", got)
 	}
 	if !strings.Contains(got, "**Intersection**") {
@@ -217,8 +217,8 @@ func TestRenderMarkdown_POSIXClass(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "[[:alpha:]]", "posix-ere")
-	if !strings.Contains(got, "POSIX [:alpha:]") {
-		t.Errorf("expected POSIX [:alpha:], got:\n%s", got)
+	if !strings.Contains(got, "POSIX `[:alpha:]` (alphabetic characters)") {
+		t.Errorf("expected POSIX [:alpha:] with description, got:\n%s", got)
 	}
 }
 
@@ -235,8 +235,8 @@ func TestRenderMarkdown_NegatedPOSIXClass(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "[[:^digit:]]", "pcre")
-	if !strings.Contains(got, "NOT POSIX [:digit:]") {
-		t.Errorf("expected NOT POSIX [:digit:], got:\n%s", got)
+	if !strings.Contains(got, "NOT POSIX `[:digit:]` (digits)") {
+		t.Errorf("expected NOT POSIX [:digit:] with description, got:\n%s", got)
 	}
 }
 
@@ -253,7 +253,7 @@ func TestRenderMarkdown_UnicodeProperty(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, `[\p{Letter}]`, "java")
-	if !strings.Contains(got, `Unicode property \p{Letter}`) {
+	if !strings.Contains(got, "Unicode property `\\p{Letter}`") {
 		t.Errorf("expected unicode property, got:\n%s", got)
 	}
 }
@@ -267,7 +267,7 @@ func TestRenderMarkdown_NegatedUnicodeProperty(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, `\P{L}`, "java")
-	if !strings.Contains(got, `NOT Unicode property \P{L}`) {
+	if !strings.Contains(got, "NOT Unicode property `\\P{L}`") {
 		t.Errorf("expected negated unicode property, got:\n%s", got)
 	}
 }
@@ -280,14 +280,14 @@ func TestRenderMarkdown_AllSubexpTypes(t *testing.T) {
 		groupName string
 		want      string
 	}{
-		{"capture", ast.GroupCapture, 1, "", "**Capture group #1**"},
-		{"named", ast.GroupNamedCapture, 2, "word", `**Named capture group #2 "word"**`},
-		{"non-capture", ast.GroupNonCapture, 0, "", "**Non-capturing group**"},
-		{"positive lookahead", ast.GroupPositiveLookahead, 0, "", "**Positive lookahead**"},
-		{"negative lookahead", ast.GroupNegativeLookahead, 0, "", "**Negative lookahead**"},
-		{"positive lookbehind", ast.GroupPositiveLookbehind, 0, "", "**Positive lookbehind**"},
-		{"negative lookbehind", ast.GroupNegativeLookbehind, 0, "", "**Negative lookbehind**"},
-		{"atomic", ast.GroupAtomic, 0, "", "**Atomic group**"},
+		{"capture", ast.GroupCapture, 1, "", "**Capture group #1** -- captures matched text for back-reference as `\\1`"},
+		{"named", ast.GroupNamedCapture, 2, "word", `**Named capture group #2 "word"** -- captures matched text for back-reference as`},
+		{"non-capture", ast.GroupNonCapture, 0, "", "**Non-capturing group** -- groups without capturing"},
+		{"positive lookahead", ast.GroupPositiveLookahead, 0, "", "**Positive lookahead** -- asserts what follows matches, without consuming characters"},
+		{"negative lookahead", ast.GroupNegativeLookahead, 0, "", "**Negative lookahead** -- asserts what follows does NOT match"},
+		{"positive lookbehind", ast.GroupPositiveLookbehind, 0, "", "**Positive lookbehind** -- asserts what precedes matches, without consuming characters"},
+		{"negative lookbehind", ast.GroupNegativeLookbehind, 0, "", "**Negative lookbehind** -- asserts what precedes does NOT match"},
+		{"atomic", ast.GroupAtomic, 0, "", "**Atomic group** -- matches without backtracking"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -326,8 +326,8 @@ func TestRenderMarkdown_BackReferenceNumbered(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, `\1`, "javascript")
-	if !strings.Contains(got, "Back-reference #1") {
-		t.Errorf("expected Back-reference #1, got:\n%s", got)
+	if !strings.Contains(got, "Matches the same text previously captured by group #1") {
+		t.Errorf("expected back-reference description, got:\n%s", got)
 	}
 }
 
@@ -340,27 +340,27 @@ func TestRenderMarkdown_BackReferenceNamed(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, `\k<word>`, "pcre")
-	if !strings.Contains(got, `Back-reference "word"`) {
-		t.Errorf("expected Back-reference \"word\", got:\n%s", got)
+	if !strings.Contains(got, `Matches the same text previously captured by group "word"`) {
+		t.Errorf("expected named back-reference description, got:\n%s", got)
 	}
 }
 
-func TestRenderMarkdown_QuantifierVariants(t *testing.T) {
+func TestRenderMarkdown_QuantifierMerged(t *testing.T) {
 	tests := []struct {
 		name   string
 		repeat ast.Repeat
 		want   string
 	}{
-		{"0+ greedy", ast.Repeat{Min: 0, Max: -1, Greedy: true}, "Quantifier: 0 or more (greedy)"},
-		{"1+ greedy", ast.Repeat{Min: 1, Max: -1, Greedy: true}, "Quantifier: 1 or more (greedy)"},
-		{"optional greedy", ast.Repeat{Min: 0, Max: 1, Greedy: true}, "Quantifier: optional (greedy)"},
-		{"0+ lazy", ast.Repeat{Min: 0, Max: -1, Greedy: false}, "Quantifier: 0 or more (lazy)"},
-		{"1+ lazy", ast.Repeat{Min: 1, Max: -1, Greedy: false}, "Quantifier: 1 or more (lazy)"},
-		{"exact 3", ast.Repeat{Min: 3, Max: 3, Greedy: true}, "Quantifier: exactly 3 times"},
-		{"range 2-5", ast.Repeat{Min: 2, Max: 5, Greedy: true}, "Quantifier: 2 to 5 times (greedy)"},
-		{"2+ greedy", ast.Repeat{Min: 2, Max: -1, Greedy: true}, "Quantifier: 2 or more (greedy)"},
-		{"1+ possessive", ast.Repeat{Min: 1, Max: -1, Greedy: true, Possessive: true}, "Quantifier: 1 or more (possessive)"},
-		{"0+ possessive", ast.Repeat{Min: 0, Max: -1, Greedy: true, Possessive: true}, "Quantifier: 0 or more (possessive)"},
+		{"0+ greedy", ast.Repeat{Min: 0, Max: -1, Greedy: true}, "Matches `a` literally, 0 or more times (greedy)"},
+		{"1+ greedy", ast.Repeat{Min: 1, Max: -1, Greedy: true}, "Matches `a` literally, 1 or more times (greedy)"},
+		{"optional greedy", ast.Repeat{Min: 0, Max: 1, Greedy: true}, "Matches `a` literally, optionally"},
+		{"0+ lazy", ast.Repeat{Min: 0, Max: -1, Greedy: false}, "Matches `a` literally, 0 or more times (lazy)"},
+		{"1+ lazy", ast.Repeat{Min: 1, Max: -1, Greedy: false}, "Matches `a` literally, 1 or more times (lazy)"},
+		{"exact 3", ast.Repeat{Min: 3, Max: 3, Greedy: true}, "Matches `a` literally, exactly 3 times"},
+		{"range 2-5", ast.Repeat{Min: 2, Max: 5, Greedy: true}, "Matches `a` literally, 2 to 5 times (greedy)"},
+		{"2+ greedy", ast.Repeat{Min: 2, Max: -1, Greedy: true}, "Matches `a` literally, 2 or more times (greedy)"},
+		{"1+ possessive", ast.Repeat{Min: 1, Max: -1, Greedy: true, Possessive: true}, "Matches `a` literally, 1 or more times (possessive)"},
+		{"0+ possessive", ast.Repeat{Min: 0, Max: -1, Greedy: true, Possessive: true}, "Matches `a` literally, 0 or more times (possessive)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -389,16 +389,15 @@ func TestRenderMarkdown_QuantifierExactNoModifier(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "a{3}", "javascript")
-	if !strings.Contains(got, "Quantifier: exactly 3 times") {
+	if !strings.Contains(got, "exactly 3 times") {
 		t.Errorf("expected exact quantifier, got:\n%s", got)
 	}
-	// Exact quantifiers should NOT have greedy/lazy/possessive
 	if strings.Contains(got, "(greedy)") || strings.Contains(got, "(lazy)") || strings.Contains(got, "(possessive)") {
 		t.Errorf("exact quantifier should not have modifier, got:\n%s", got)
 	}
 }
 
-func TestRenderMarkdown_QuantifierAsSibling(t *testing.T) {
+func TestRenderMarkdown_QuantifierMergedSingleLine(t *testing.T) {
 	root := &ast.Regexp{
 		Matches: []*ast.Match{
 			{Fragments: []*ast.MatchFragment{
@@ -407,29 +406,12 @@ func TestRenderMarkdown_QuantifierAsSibling(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "a+", "javascript")
-	lines := strings.Split(got, "\n")
-
-	var literalLine, quantLine int
-	for i, line := range lines {
-		if strings.Contains(line, "Literal `a`") {
-			literalLine = i
-		}
-		if strings.Contains(line, "Quantifier:") {
-			quantLine = i
-		}
+	// Quantifier should be merged into the literal line, not a separate sibling
+	if strings.Contains(got, "Quantifier:") {
+		t.Errorf("quantifier should be merged into node line, not separate, got:\n%s", got)
 	}
-	if literalLine == 0 || quantLine == 0 {
-		t.Fatalf("missing literal or quantifier line in:\n%s", got)
-	}
-	// Quantifier should be the line right after the literal
-	if quantLine != literalLine+1 {
-		t.Errorf("quantifier should be sibling (next line), literalLine=%d, quantLine=%d", literalLine, quantLine)
-	}
-	// Both should have the same indentation
-	literalIndent := len(lines[literalLine]) - len(strings.TrimLeft(lines[literalLine], " "))
-	quantIndent := len(lines[quantLine]) - len(strings.TrimLeft(lines[quantLine], " "))
-	if literalIndent != quantIndent {
-		t.Errorf("quantifier indent (%d) != literal indent (%d)", quantIndent, literalIndent)
+	if !strings.Contains(got, "Matches `a` literally, 1 or more times (greedy)") {
+		t.Errorf("expected merged line, got:\n%s", got)
 	}
 }
 
@@ -465,8 +447,17 @@ func TestRenderMarkdown_MultiMatchAlternation(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "a|b|c", "javascript")
-	if !strings.Contains(got, "**Alternation** (3 branches)") {
+	if !strings.Contains(got, "**Alternation** -- matches one of 3 branches:") {
 		t.Errorf("expected alternation with 3 branches, got:\n%s", got)
+	}
+	if !strings.Contains(got, "**Branch 1:** Matches `a` literally") {
+		t.Errorf("expected Branch 1, got:\n%s", got)
+	}
+	if !strings.Contains(got, "**Branch 2:** Matches `b` literally") {
+		t.Errorf("expected Branch 2, got:\n%s", got)
+	}
+	if !strings.Contains(got, "**Branch 3:** Matches `c` literally") {
+		t.Errorf("expected Branch 3, got:\n%s", got)
 	}
 }
 
@@ -510,16 +501,16 @@ func TestRenderMarkdown_Conditional(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "(?(1)yes|no)", "pcre")
-	if !strings.Contains(got, "**Conditional**") {
-		t.Errorf("expected Conditional, got:\n%s", got)
+	if !strings.Contains(got, "**Conditional** -- matches based on a condition") {
+		t.Errorf("expected Conditional with annotation, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Back-reference #1") {
+	if !strings.Contains(got, "Matches the same text previously captured by group #1") {
 		t.Errorf("expected condition, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Literal `yes`") {
+	if !strings.Contains(got, "Matches `yes` literally") {
 		t.Errorf("expected true branch, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Literal `no`") {
+	if !strings.Contains(got, "Matches `no` literally") {
 		t.Errorf("expected false branch, got:\n%s", got)
 	}
 }
@@ -589,8 +580,8 @@ func TestRenderMarkdown_QuotedLiteral(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, `\Qfoo.bar\E`, "pcre")
-	if !strings.Contains(got, "Literal `foo.bar`") {
-		t.Errorf("expected Literal `foo.bar`, got:\n%s", got)
+	if !strings.Contains(got, "Matches `foo.bar` literally") {
+		t.Errorf("expected Matches `foo.bar` literally, got:\n%s", got)
 	}
 }
 
@@ -603,8 +594,8 @@ func TestRenderMarkdown_InlineModifier(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "(?im-s)", "pcre")
-	if !strings.Contains(got, "Flags: +im -s") {
-		t.Errorf("expected Flags: +im -s, got:\n%s", got)
+	if !strings.Contains(got, "Flags: +im -s -- modifies matching behavior") {
+		t.Errorf("expected Flags with annotation, got:\n%s", got)
 	}
 }
 
@@ -629,7 +620,7 @@ func TestRenderMarkdown_InlineModifierScoped(t *testing.T) {
 	if !strings.Contains(got, "Flags: +i") {
 		t.Errorf("expected Flags: +i, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Literal `abc`") {
+	if !strings.Contains(got, "Matches `abc` literally") {
 		t.Errorf("expected body literal, got:\n%s", got)
 	}
 }
@@ -651,8 +642,8 @@ func TestRenderMarkdown_BranchReset(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, "(?|a)", "pcre")
-	if !strings.Contains(got, "**Branch reset**") {
-		t.Errorf("expected Branch reset, got:\n%s", got)
+	if !strings.Contains(got, "**Branch reset** -- resets group numbering for each branch") {
+		t.Errorf("expected Branch reset with annotation, got:\n%s", got)
 	}
 }
 
@@ -864,15 +855,13 @@ func TestRenderMarkdown_NestedGroups(t *testing.T) {
 	}
 	got := RenderMarkdown(root, "(a(b))", "javascript")
 
-	// Verify indentation depth: outer group at level 0, sequence at level 1,
-	// inner group at level 2, inner literal at level 3
-	if !strings.Contains(got, "- **Capture group #1**") {
+	if !strings.Contains(got, "- **Capture group #1** -- captures matched text for back-reference as `\\1`") {
 		t.Errorf("expected outer capture group, got:\n%s", got)
 	}
-	if !strings.Contains(got, "    - **Capture group #2**") {
+	if !strings.Contains(got, "    - **Capture group #2** -- captures matched text for back-reference as `\\2`") {
 		t.Errorf("expected inner capture group at indent 2, got:\n%s", got)
 	}
-	if !strings.Contains(got, "      - Literal `b`") {
+	if !strings.Contains(got, "      - Matches `b` literally") {
 		t.Errorf("expected inner literal at indent 3, got:\n%s", got)
 	}
 }
@@ -908,12 +897,10 @@ func TestRenderMarkdown_ComplexPattern(t *testing.T) {
 **Flavor:** JavaScript
 
 - **Sequence**
-  - Literal ` + "`foo`" + `
-  - **Capture group #1**
-    - **Character class**: one of
-      - Range ` + "`a` to `z`" + `
-    - Quantifier: 1 or more (greedy)
-  - Quantifier: optional (greedy)
+  - Matches ` + "`foo`" + ` literally
+  - **Capture group #1** -- captures matched text for back-reference as ` + "`\\1`" + `, optionally
+    - Matches one of the following, 1 or more times (greedy):
+      - ` + "`a` to `z` (lowercase letters)" + `
 `
 	if got != expected {
 		t.Errorf("complex pattern mismatch.\nwant:\n%s\ngot:\n%s", expected, got)
@@ -933,7 +920,69 @@ func TestRenderMarkdown_EscapeInCharset(t *testing.T) {
 		},
 	}
 	got := RenderMarkdown(root, `[\d]`, "javascript")
-	if !strings.Contains(got, "Escape: digit (0-9)") {
+	if !strings.Contains(got, "any digit `\\d` (0-9)") {
 		t.Errorf("expected escape in charset, got:\n%s", got)
+	}
+}
+
+func TestRenderMarkdown_CharsetQuantifierMerged(t *testing.T) {
+	root := &ast.Regexp{
+		Matches: []*ast.Match{
+			{Fragments: []*ast.MatchFragment{
+				{Content: &ast.Charset{
+					Items: []ast.CharsetItem{
+						&ast.CharsetRange{First: "a", Last: "z"},
+					},
+				}, Repeat: &ast.Repeat{Min: 1, Max: -1, Greedy: true}},
+			}},
+		},
+	}
+	got := RenderMarkdown(root, "[a-z]+", "javascript")
+	if !strings.Contains(got, "Matches one of the following, 1 or more times (greedy):") {
+		t.Errorf("expected charset with merged quantifier, got:\n%s", got)
+	}
+}
+
+func TestRenderMarkdown_GroupedLiterals(t *testing.T) {
+	root := &ast.Regexp{
+		Matches: []*ast.Match{
+			{Fragments: []*ast.MatchFragment{
+				{Content: &ast.Charset{
+					Items: []ast.CharsetItem{
+						&ast.CharsetLiteral{Text: "."},
+						&ast.CharsetLiteral{Text: "_"},
+						&ast.CharsetLiteral{Text: "%"},
+					},
+				}},
+			}},
+		},
+	}
+	got := RenderMarkdown(root, "[._%]", "javascript")
+	if !strings.Contains(got, "`.`, `_`, `%` (literal characters)") {
+		t.Errorf("expected grouped literals, got:\n%s", got)
+	}
+}
+
+func TestRenderMarkdown_AlternationWithMultiFragmentBranch(t *testing.T) {
+	root := &ast.Regexp{
+		Matches: []*ast.Match{
+			{Fragments: []*ast.MatchFragment{
+				{Content: &ast.Literal{Text: "a"}},
+				{Content: &ast.Literal{Text: "b"}},
+			}},
+			{Fragments: []*ast.MatchFragment{
+				{Content: &ast.Literal{Text: "c"}},
+			}},
+		},
+	}
+	got := RenderMarkdown(root, "ab|c", "javascript")
+	if !strings.Contains(got, "**Alternation** -- matches one of 2 branches:") {
+		t.Errorf("expected alternation, got:\n%s", got)
+	}
+	if !strings.Contains(got, "**Branch 1:**") {
+		t.Errorf("expected Branch 1 header, got:\n%s", got)
+	}
+	if !strings.Contains(got, "**Branch 2:** Matches `c` literally") {
+		t.Errorf("expected inlined Branch 2, got:\n%s", got)
 	}
 }

@@ -409,9 +409,9 @@ func TestRecursiveRefAST(t *testing.T) {
 	p := &PCRE{}
 
 	tests := []struct {
-		name   string
+		name    string
 		pattern string
-		target string
+		target  string
 	}{
 		{"whole pattern R", "(?R)", "R"},
 		{"whole pattern 0", "(?0)", "0"},

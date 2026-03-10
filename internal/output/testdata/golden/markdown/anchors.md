@@ -3,6 +3,6 @@
 **Flavor:** JavaScript
 
 - **Sequence**
-  - Start of line
-  - Literal `hello`
-  - End of line
+  - Asserts start of line
+  - Matches `hello` literally
+  - Asserts end of line

@@ -97,13 +97,13 @@ func TestRenderCharsetRange(t *testing.T) {
 
 func TestRenderQuantifiers(t *testing.T) {
 	tests := []struct {
-		pattern  string
-		hasLoop  bool
-		hasSkip  bool
+		pattern string
+		hasLoop bool
+		hasSkip bool
 	}{
-		{"a*", true, true},   // 0 or more
-		{"a+", true, false},  // 1 or more
-		{"a?", false, true},  // 0 or 1
+		{"a*", true, true},    // 0 or more
+		{"a+", true, false},   // 1 or more
+		{"a?", false, true},   // 0 or 1
 		{"a{3}", true, false}, // exactly 3 (has loop for repeating, no skip since min=3)
 	}
 
