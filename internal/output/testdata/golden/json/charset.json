@@ -1,0 +1,30 @@
+{
+  "pattern": "[a-zA-Z0-9]",
+  "flavor": "javascript",
+  "root": {
+    "elements": [
+      {
+        "members": [
+          {
+            "from": "a",
+            "to": "z",
+            "type": "range"
+          },
+          {
+            "from": "A",
+            "to": "Z",
+            "type": "range"
+          },
+          {
+            "from": "0",
+            "to": "9",
+            "type": "range"
+          }
+        ],
+        "negated": false,
+        "type": "characterClass"
+      }
+    ],
+    "type": "sequence"
+  }
+}

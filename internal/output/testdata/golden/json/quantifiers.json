@@ -1,0 +1,45 @@
+{
+  "pattern": "a*b+c?d{2,5}",
+  "flavor": "javascript",
+  "root": {
+    "elements": [
+      {
+        "quantifier": {
+          "min": 0,
+          "max": null,
+          "greedy": true
+        },
+        "type": "literal",
+        "value": "a"
+      },
+      {
+        "quantifier": {
+          "min": 1,
+          "max": null,
+          "greedy": true
+        },
+        "type": "literal",
+        "value": "b"
+      },
+      {
+        "quantifier": {
+          "min": 0,
+          "max": 1,
+          "greedy": true
+        },
+        "type": "literal",
+        "value": "c"
+      },
+      {
+        "quantifier": {
+          "min": 2,
+          "max": 5,
+          "greedy": true
+        },
+        "type": "literal",
+        "value": "d"
+      }
+    ],
+    "type": "sequence"
+  }
+}

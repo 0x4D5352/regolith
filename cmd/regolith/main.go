@@ -10,6 +10,7 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"github.com/0x4d5352/regolith/internal/flavor"
+	"github.com/0x4d5352/regolith/internal/output"
 	"github.com/0x4d5352/regolith/internal/renderer"
 	"github.com/0x4d5352/regolith/internal/unescape"
 
@@ -47,6 +48,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	outputFile := fs.StringP("output", "o", "regex.svg", "Output file path")
 	showVersion := fs.BoolP("version", "v", false, "Show version")
 	flavorName := fs.StringP("flavor", "f", "javascript", "Regex flavor (javascript, java, dotnet, pcre, posix-bre, posix-ere, gnugrep, gnugrep-bre, gnugrep-ere)")
+	formatName := fs.String("format", "svg", "Output format: svg, json, markdown")
 	unescapeFlag := fs.BoolP("unescape", "u", false, `Apply string literal unescaping before parsing (e.g., \\ becomes \)`)
 
 	// Dimension flags
@@ -85,6 +87,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stderr, "  regolith --literal-fill '#ff0000' 'hello'\n")
 		fmt.Fprintf(stderr, "  echo '^hello$' | regolith\n")
 		fmt.Fprintf(stderr, "  regolith -f java -u '\\\\d+\\\\.\\\\d+'\n")
+		fmt.Fprintf(stderr, "\n  regolith --format json 'foo([a-z]+)' | jq .\n")
+		fmt.Fprintf(stderr, "  regolith --format markdown '^hello$' | glow -\n")
+		fmt.Fprintf(stderr, "  echo '[a-z]+' | regolith --format json\n")
 	}
 
 	err := fs.Parse(args[1:])
@@ -125,38 +130,55 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 
 	// Parse the pattern using the selected flavor
-	ast, err := f.Parse(pattern)
+	parsedAST, err := f.Parse(pattern)
 	if err != nil {
 		displayParseError(stderr, pattern, err)
 		return fmt.Errorf("parse error: %w", err)
 	}
 
-	// Build config from flags
-	cfg := renderer.DefaultConfig()
-	cfg.Padding = *padding
-	cfg.FontSize = *fontSize
-	cfg.CharWidth = *fontSize * 0.6 // Approximate monospace character width
-	cfg.LineWidth = *lineWidth
-	cfg.TextColor = *textColor
-	cfg.LineColor = *lineColor
-	cfg.LiteralFill = *literalFill
-	cfg.CharsetFill = *charsetFill
-	cfg.EscapeFill = *escapeFill
-	cfg.AnchorFill = *anchorFill
-	cfg.SubexpFill = *subexpFill
+	switch *formatName {
+	case "svg":
+		// Build config from flags
+		cfg := renderer.DefaultConfig()
+		cfg.Padding = *padding
+		cfg.FontSize = *fontSize
+		cfg.CharWidth = *fontSize * 0.6 // Approximate monospace character width
+		cfg.LineWidth = *lineWidth
+		cfg.TextColor = *textColor
+		cfg.LineColor = *lineColor
+		cfg.LiteralFill = *literalFill
+		cfg.CharsetFill = *charsetFill
+		cfg.EscapeFill = *escapeFill
+		cfg.AnchorFill = *anchorFill
+		cfg.SubexpFill = *subexpFill
 
-	// Render to SVG
-	r := renderer.New(cfg)
-	svg := r.Render(ast)
+		r := renderer.New(cfg)
+		svg := r.Render(parsedAST)
 
-	// Write to output file
-	err = os.WriteFile(*outputFile, []byte(svg), 0644)
-	if err != nil {
-		fmt.Fprintf(stderr, "Error writing output file: %v\n", err)
-		return fmt.Errorf("writing output: %w", err)
+		err = os.WriteFile(*outputFile, []byte(svg), 0644)
+		if err != nil {
+			fmt.Fprintf(stderr, "Error writing output file: %v\n", err)
+			return fmt.Errorf("writing output: %w", err)
+		}
+		fmt.Fprintf(stdout, "Wrote %s\n", *outputFile)
+
+	case "json":
+		out, err := output.RenderJSON(parsedAST, pattern, f.Name())
+		if err != nil {
+			fmt.Fprintf(stderr, "Error rendering JSON: %v\n", err)
+			return fmt.Errorf("json render: %w", err)
+		}
+		fmt.Fprintln(stdout, out)
+
+	case "markdown":
+		out := output.RenderMarkdown(parsedAST, pattern, f.Name())
+		fmt.Fprint(stdout, out)
+
+	default:
+		fmt.Fprintf(stderr, "Error: unknown format %q\nAvailable: svg, json, markdown\n", *formatName)
+		return fmt.Errorf("unknown format: %s", *formatName)
 	}
 
-	fmt.Fprintf(stdout, "Wrote %s\n", *outputFile)
 	return nil
 }
 

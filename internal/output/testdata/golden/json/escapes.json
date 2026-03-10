@@ -1,0 +1,27 @@
+{
+  "pattern": "\\d\\w\\s",
+  "flavor": "javascript",
+  "root": {
+    "elements": [
+      {
+        "code": "d",
+        "escapeType": "digit",
+        "type": "escape",
+        "value": "digit"
+      },
+      {
+        "code": "w",
+        "escapeType": "word",
+        "type": "escape",
+        "value": "word"
+      },
+      {
+        "code": "s",
+        "escapeType": "whitespace",
+        "type": "escape",
+        "value": "white space"
+      }
+    ],
+    "type": "sequence"
+  }
+}

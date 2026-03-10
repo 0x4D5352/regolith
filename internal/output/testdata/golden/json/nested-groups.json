@@ -1,0 +1,51 @@
+{
+  "pattern": "(a(b(c)))",
+  "flavor": "javascript",
+  "root": {
+    "elements": [
+      {
+        "body": {
+          "elements": [
+            {
+              "type": "literal",
+              "value": "a"
+            },
+            {
+              "body": {
+                "elements": [
+                  {
+                    "type": "literal",
+                    "value": "b"
+                  },
+                  {
+                    "body": {
+                      "elements": [
+                        {
+                          "type": "literal",
+                          "value": "c"
+                        }
+                      ],
+                      "type": "sequence"
+                    },
+                    "kind": "capture",
+                    "number": 1,
+                    "type": "group"
+                  }
+                ],
+                "type": "sequence"
+              },
+              "kind": "capture",
+              "number": 2,
+              "type": "group"
+            }
+          ],
+          "type": "sequence"
+        },
+        "kind": "capture",
+        "number": 3,
+        "type": "group"
+      }
+    ],
+    "type": "sequence"
+  }
+}

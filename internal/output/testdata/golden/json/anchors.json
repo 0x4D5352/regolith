@@ -1,0 +1,21 @@
+{
+  "pattern": "^hello$",
+  "flavor": "javascript",
+  "root": {
+    "elements": [
+      {
+        "anchorType": "start",
+        "type": "anchor"
+      },
+      {
+        "type": "literal",
+        "value": "hello"
+      },
+      {
+        "anchorType": "end",
+        "type": "anchor"
+      }
+    ],
+    "type": "sequence"
+  }
+}

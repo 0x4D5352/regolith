@@ -1,0 +1,45 @@
+{
+  "pattern": "(\\w+)\\s+\\1",
+  "flavor": "javascript",
+  "root": {
+    "elements": [
+      {
+        "body": {
+          "elements": [
+            {
+              "code": "w",
+              "escapeType": "word",
+              "quantifier": {
+                "min": 1,
+                "max": null,
+                "greedy": true
+              },
+              "type": "escape",
+              "value": "word"
+            }
+          ],
+          "type": "sequence"
+        },
+        "kind": "capture",
+        "number": 1,
+        "type": "group"
+      },
+      {
+        "code": "s",
+        "escapeType": "whitespace",
+        "quantifier": {
+          "min": 1,
+          "max": null,
+          "greedy": true
+        },
+        "type": "escape",
+        "value": "white space"
+      },
+      {
+        "number": 1,
+        "type": "backReference"
+      }
+    ],
+    "type": "sequence"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "pattern": "foo(?=bar)(?!baz)",
+  "flavor": "javascript",
+  "root": {
+    "elements": [
+      {
+        "type": "literal",
+        "value": "foo"
+      },
+      {
+        "body": {
+          "elements": [
+            {
+              "type": "literal",
+              "value": "bar"
+            }
+          ],
+          "type": "sequence"
+        },
+        "kind": "positiveLookahead",
+        "type": "group"
+      },
+      {
+        "body": {
+          "elements": [
+            {
+              "type": "literal",
+              "value": "baz"
+            }
+          ],
+          "type": "sequence"
+        },
+        "kind": "negativeLookahead",
+        "type": "group"
+      }
+    ],
+    "type": "sequence"
+  }
+}

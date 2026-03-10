@@ -1,0 +1,36 @@
+{
+  "pattern": "a|b|c",
+  "flavor": "javascript",
+  "root": {
+    "alternatives": [
+      {
+        "elements": [
+          {
+            "type": "literal",
+            "value": "a"
+          }
+        ],
+        "type": "sequence"
+      },
+      {
+        "elements": [
+          {
+            "type": "literal",
+            "value": "b"
+          }
+        ],
+        "type": "sequence"
+      },
+      {
+        "elements": [
+          {
+            "type": "literal",
+            "value": "c"
+          }
+        ],
+        "type": "sequence"
+      }
+    ],
+    "type": "alternation"
+  }
+}

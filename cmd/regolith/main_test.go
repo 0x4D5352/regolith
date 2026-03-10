@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -556,6 +557,122 @@ func TestRunColorFlagsAfterPattern(t *testing.T) {
 
 	if !strings.Contains(string(data), "#ff0000") {
 		t.Error("expected custom literal-fill color in SVG output")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// --format flag tests
+// ---------------------------------------------------------------------------
+
+func TestRunFormatJSON(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--format", "json", "foo([a-z]+)"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !json.Valid([]byte(out)) {
+		t.Fatalf("expected valid JSON, got: %s", out)
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+	if doc["pattern"] != "foo([a-z]+)" {
+		t.Errorf("expected pattern 'foo([a-z]+)', got: %v", doc["pattern"])
+	}
+	if doc["flavor"] != "javascript" {
+		t.Errorf("expected flavor 'javascript', got: %v", doc["flavor"])
+	}
+	if doc["root"] == nil {
+		t.Error("expected root node in JSON output")
+	}
+}
+
+func TestRunFormatMarkdown(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--format", "markdown", "^hello$"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.HasPrefix(out, "# Regex:") {
+		t.Errorf("expected markdown to start with '# Regex:', got: %s", out[:min(50, len(out))])
+	}
+	if !strings.Contains(out, "**Flavor:**") {
+		t.Error("expected markdown to contain '**Flavor:**'")
+	}
+}
+
+func TestRunFormatSVG(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--format", "svg", "-o", out, "hello"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if _, err := os.Stat(out); os.IsNotExist(err) {
+		t.Fatal("expected SVG output file to be created")
+	}
+	if !strings.Contains(stdout.String(), "Wrote") {
+		t.Errorf("expected stdout to contain 'Wrote', got: %s", stdout.String())
+	}
+}
+
+func TestRunFormatUnknown(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--format", "xml", "hello"}, nil, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error for unknown format, got nil")
+	}
+
+	stderrStr := stderr.String()
+	if !strings.Contains(stderrStr, "unknown format") {
+		t.Errorf("expected stderr to mention 'unknown format', got: %s", stderrStr)
+	}
+	if !strings.Contains(stderrStr, "Available: svg, json, markdown") {
+		t.Errorf("expected stderr to list available formats, got: %s", stderrStr)
+	}
+}
+
+func TestRunDefaultFormatIsSVG(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	var stdout, stderr bytes.Buffer
+	// No --format flag: should behave like --format svg
+	err := run([]string{"regolith", "-o", out, "hello"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if _, err := os.Stat(out); os.IsNotExist(err) {
+		t.Fatal("expected SVG output file when no --format specified")
+	}
+	if !strings.Contains(stdout.String(), "Wrote") {
+		t.Errorf("expected stdout to contain 'Wrote', got: %s", stdout.String())
+	}
+}
+
+func TestRunFormatJSONNoFileCreated(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--format", "json", "-o", out, "hello"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v\nstderr: %s", err, stderr.String())
+	}
+
+	// JSON format should write to stdout, not create a file
+	if _, err := os.Stat(out); err == nil {
+		t.Error("expected no SVG file to be created when using --format json")
 	}
 }
 

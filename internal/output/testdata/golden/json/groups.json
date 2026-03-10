@@ -1,0 +1,51 @@
+{
+  "pattern": "(foo)(?:bar)(?\u003cname\u003ebaz)",
+  "flavor": "javascript",
+  "root": {
+    "elements": [
+      {
+        "body": {
+          "elements": [
+            {
+              "type": "literal",
+              "value": "foo"
+            }
+          ],
+          "type": "sequence"
+        },
+        "kind": "capture",
+        "number": 1,
+        "type": "group"
+      },
+      {
+        "body": {
+          "elements": [
+            {
+              "type": "literal",
+              "value": "bar"
+            }
+          ],
+          "type": "sequence"
+        },
+        "kind": "nonCapture",
+        "type": "group"
+      },
+      {
+        "body": {
+          "elements": [
+            {
+              "type": "literal",
+              "value": "baz"
+            }
+          ],
+          "type": "sequence"
+        },
+        "kind": "namedCapture",
+        "name": "name",
+        "number": 2,
+        "type": "group"
+      }
+    ],
+    "type": "sequence"
+  }
+}

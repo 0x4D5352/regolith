@@ -1,0 +1,118 @@
+{
+  "pattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+  "flavor": "javascript",
+  "root": {
+    "elements": [
+      {
+        "members": [
+          {
+            "from": "a",
+            "to": "z",
+            "type": "range"
+          },
+          {
+            "from": "A",
+            "to": "Z",
+            "type": "range"
+          },
+          {
+            "from": "0",
+            "to": "9",
+            "type": "range"
+          },
+          {
+            "type": "literal",
+            "value": "."
+          },
+          {
+            "type": "literal",
+            "value": "_"
+          },
+          {
+            "type": "literal",
+            "value": "%"
+          },
+          {
+            "type": "literal",
+            "value": "+"
+          },
+          {
+            "type": "literal",
+            "value": "-"
+          }
+        ],
+        "negated": false,
+        "quantifier": {
+          "min": 1,
+          "max": null,
+          "greedy": true
+        },
+        "type": "characterClass"
+      },
+      {
+        "type": "literal",
+        "value": "@"
+      },
+      {
+        "members": [
+          {
+            "from": "a",
+            "to": "z",
+            "type": "range"
+          },
+          {
+            "from": "A",
+            "to": "Z",
+            "type": "range"
+          },
+          {
+            "from": "0",
+            "to": "9",
+            "type": "range"
+          },
+          {
+            "type": "literal",
+            "value": "."
+          },
+          {
+            "type": "literal",
+            "value": "-"
+          }
+        ],
+        "negated": false,
+        "quantifier": {
+          "min": 1,
+          "max": null,
+          "greedy": true
+        },
+        "type": "characterClass"
+      },
+      {
+        "type": "literal",
+        "value": "."
+      },
+      {
+        "members": [
+          {
+            "from": "a",
+            "to": "z",
+            "type": "range"
+          },
+          {
+            "from": "A",
+            "to": "Z",
+            "type": "range"
+          }
+        ],
+        "negated": false,
+        "quantifier": {
+          "min": 2,
+          "max": null,
+          "greedy": true
+        },
+        "type": "characterClass"
+      }
+    ],
+    "type": "sequence"
+  }
+}
