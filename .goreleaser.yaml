@@ -4,6 +4,8 @@ project_name: regolith
 
 builds:
   - main: ./cmd/regolith
+    ldflags:
+      - -X main.version={{.Version}}
     env:
       - CGO_ENABLED=0
     goos:
