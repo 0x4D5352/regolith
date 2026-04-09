@@ -56,13 +56,14 @@ func (g *Group) Render() string {
 
 // Rect represents an SVG <rect> element
 type Rect struct {
-	X, Y          float64
-	Width, Height float64
-	Rx, Ry        float64 // Corner radius
-	Fill          string
-	Stroke        string
-	StrokeWidth   float64
-	Class         string
+	X, Y            float64
+	Width, Height   float64
+	Rx, Ry          float64 // Corner radius
+	Fill            string
+	Stroke          string
+	StrokeWidth     float64
+	StrokeDashArray string // e.g. "6,3" for dashed borders on annotation overlays
+	Class           string
 }
 
 func (r *Rect) Render() string {
@@ -87,11 +88,41 @@ func (r *Rect) Render() string {
 	if r.StrokeWidth > 0 {
 		attrs = append(attrs, `stroke-width="`+fmtFloat(r.StrokeWidth)+`"`)
 	}
+	if r.StrokeDashArray != "" {
+		attrs = append(attrs, fmt.Sprintf(`stroke-dasharray="%s"`, r.StrokeDashArray))
+	}
 	if r.Class != "" {
 		attrs = append(attrs, fmt.Sprintf(`class="%s"`, r.Class))
 	}
 
 	return fmt.Sprintf("<rect %s/>", strings.Join(attrs, " "))
+}
+
+// Circle represents an SVG <circle> element, used for severity badge icons
+// in the analysis annotation overlay.
+type Circle struct {
+	Cx, Cy float64
+	R      float64
+	Fill   string
+	Stroke string
+	Class  string
+}
+
+func (c *Circle) Render() string {
+	var attrs []string
+	attrs = append(attrs, `cx="`+fmtFloat(c.Cx)+`"`)
+	attrs = append(attrs, `cy="`+fmtFloat(c.Cy)+`"`)
+	attrs = append(attrs, `r="`+fmtFloat(c.R)+`"`)
+	if c.Fill != "" {
+		attrs = append(attrs, fmt.Sprintf(`fill="%s"`, c.Fill))
+	}
+	if c.Stroke != "" {
+		attrs = append(attrs, fmt.Sprintf(`stroke="%s"`, c.Stroke))
+	}
+	if c.Class != "" {
+		attrs = append(attrs, fmt.Sprintf(`class="%s"`, c.Class))
+	}
+	return fmt.Sprintf("<circle %s/>", strings.Join(attrs, " "))
 }
 
 // Text represents an SVG <text> element
