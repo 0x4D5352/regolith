@@ -723,6 +723,82 @@ func TestAnalyzeSubcommand(t *testing.T) {
 	}
 }
 
+func TestAnalyzeColorNever(t *testing.T) {
+	var stdout, stderr strings.Builder
+	err := run([]string{"regolith", "analyze", "--color", "never", ".*.*=.*"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if strings.Contains(stdout.String(), "\033[") {
+		t.Error("expected no ANSI codes with --color never")
+	}
+	if !strings.Contains(stdout.String(), "ERRORS") {
+		t.Error("expected ERRORS section in output")
+	}
+}
+
+func TestAnalyzeColorAlways(t *testing.T) {
+	var stdout, stderr strings.Builder
+	err := run([]string{"regolith", "analyze", "--color", "always", ".*.*=.*"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if !strings.Contains(stdout.String(), "\033[") {
+		t.Error("expected ANSI codes with --color always")
+	}
+}
+
+func TestRunColorNever(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--color", "never", "-o", out, "a|b"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if strings.Contains(stdout.String(), "\033[") {
+		t.Error("expected no ANSI codes with --color never")
+	}
+}
+
+func TestRunColorAlways(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--color", "always", "-o", out, "a|b"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	// "Wrote" message should have color.
+	if !strings.Contains(stdout.String(), "\033[") {
+		t.Error("expected ANSI codes with --color always")
+	}
+}
+
+func TestRunInvalidPatternColorAlways(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.svg")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--color", "always", "-o", out, "(?P<"}, nil, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error for invalid pattern")
+	}
+
+	if !strings.Contains(stderr.String(), "\033[") {
+		t.Error("expected ANSI codes in error output with --color always")
+	}
+	if !strings.Contains(stderr.String(), "Error parsing pattern") {
+		t.Error("expected error header text")
+	}
+}
+
 func TestBinaryUnescapeFlag(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.svg")

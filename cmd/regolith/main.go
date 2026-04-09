@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/muesli/termenv"
 	flag "github.com/spf13/pflag"
 
 	"github.com/0x4d5352/regolith/internal/analyzer"
@@ -59,6 +60,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	flavorName := fs.StringP("flavor", "f", "javascript", "Regex flavor (javascript, java, dotnet, pcre, posix-bre, posix-ere, gnugrep, gnugrep-bre, gnugrep-ere)")
 	formatName := fs.String("format", "svg", "Output format: svg, json, markdown")
 	unescapeFlag := fs.BoolP("unescape", "u", false, `Apply string literal unescaping before parsing (e.g., \\ becomes \)`)
+	colorMode := fs.String("color", "auto", "Color output: auto, always, never")
 
 	// Dimension flags
 	padding := fs.Float64P("padding", "p", 10, "Padding around diagram")
@@ -115,6 +117,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return nil
 	}
 
+	profile := output.ResolveColorProfile(*colorMode)
+	co := termenv.NewOutput(stderr, termenv.WithProfile(profile))
+
 	// Get the flavor
 	f, ok := flavor.Get(*flavorName)
 	if !ok {
@@ -141,7 +146,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	// Parse the pattern using the selected flavor
 	parsedAST, err := f.Parse(pattern)
 	if err != nil {
-		displayParseError(stderr, pattern, err)
+		displayParseError(stderr, pattern, err, co)
 		return fmt.Errorf("parse error: %w", err)
 	}
 
@@ -169,7 +174,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 			_, _ = fmt.Fprintf(stderr, "Error writing output file: %v\n", err)
 			return fmt.Errorf("writing output: %w", err)
 		}
-		_, _ = fmt.Fprintf(stdout, "Wrote %s\n", *outputFile)
+		_, _ = fmt.Fprintln(stdout, co.String("Wrote "+*outputFile).Foreground(termenv.ANSIColor(2)).String())
 
 	case "json":
 		out, err := output.RenderJSON(parsedAST, pattern, f.Name())
@@ -211,7 +216,7 @@ func getInput(args []string, stdin io.Reader) (string, error) {
 }
 
 // displayParseError shows a parse error with position indicator
-func displayParseError(w io.Writer, pattern string, err error) {
+func displayParseError(w io.Writer, pattern string, err error, co *termenv.Output) {
 	errStr := err.Error()
 
 	// Try to extract position from pigeon error format
@@ -244,12 +249,14 @@ func displayParseError(w io.Writer, pattern string, err error) {
 		}
 	}
 
-	_, _ = fmt.Fprintf(w, "Error parsing pattern:\n\n")
+	header := co.String("Error parsing pattern:").Bold().Foreground(termenv.ANSIColor(1)).String()
+	_, _ = fmt.Fprintf(w, "%s\n\n", header)
 	_, _ = fmt.Fprintf(w, "  %s\n", pattern)
 
 	// Show position indicator if we have column info
 	if col > 0 && col <= len(pattern) {
-		_, _ = fmt.Fprintf(w, "  %s^\n", strings.Repeat(" ", col-1))
+		caret := co.String("^").Bold().Foreground(termenv.ANSIColor(1)).String()
+		_, _ = fmt.Fprintf(w, "  %s%s\n", strings.Repeat(" ", col-1), caret)
 	}
 
 	if msg != "" {
@@ -281,6 +288,7 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 	// corpusFile := fs.String("corpus-file", "", "Path to custom corpus file")
 	sizes := fs.IntSlice("sizes", []int{10, 100, 1000, 10000, 100000}, "Input sizes for benchmarking")
 	severity := fs.String("severity", "info", "Minimum severity: info, warning, error, critical")
+	colorMode := fs.String("color", "auto", "Color output: auto, always, never")
 
 	padding := fs.Float64P("padding", "p", 10, "Padding around diagram")
 	fontSize := fs.Float64("font-size", 14, "Font size in pixels")
@@ -298,6 +306,9 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 		return err
 	}
 
+	profile := output.ResolveColorProfile(*colorMode)
+	co := termenv.NewOutput(stderr, termenv.WithProfile(profile))
+
 	f, ok := flavor.Get(*flavorName)
 	if !ok {
 		_, _ = fmt.Fprintf(stderr, "Error: unknown flavor '%s'\n", *flavorName)
@@ -313,7 +324,7 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 
 	parsedAST, err := f.Parse(pattern)
 	if err != nil {
-		displayParseError(stderr, pattern, err)
+		displayParseError(stderr, pattern, err, co)
 		return fmt.Errorf("parse error: %w", err)
 	}
 
@@ -339,12 +350,12 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 	switch *formatName {
 	case "text":
 		markdown := *outputFile != ""
-		text := output.RenderAnalysisText(report, markdown)
+		text := output.RenderAnalysisText(report, markdown, co)
 		if *outputFile != "" {
 			if err := os.WriteFile(*outputFile, []byte(text), 0644); err != nil {
 				return fmt.Errorf("writing output: %w", err)
 			}
-			_, _ = fmt.Fprintf(stdout, "Wrote %s\n", *outputFile)
+			_, _ = fmt.Fprintln(stdout, co.String("Wrote "+*outputFile).Foreground(termenv.ANSIColor(2)).String())
 		} else {
 			_, _ = fmt.Fprint(stdout, text)
 		}
@@ -371,7 +382,7 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 		if err := os.WriteFile(*outputFile, []byte(svg), 0644); err != nil {
 			return fmt.Errorf("writing output: %w", err)
 		}
-		_, _ = fmt.Fprintf(stdout, "Wrote %s\n", *outputFile)
+		_, _ = fmt.Fprintln(stdout, co.String("Wrote "+*outputFile).Foreground(termenv.ANSIColor(2)).String())
 
 	default:
 		_, _ = fmt.Fprintf(stderr, "Error: unknown format %q\n", *formatName)
