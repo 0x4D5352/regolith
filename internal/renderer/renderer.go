@@ -5,13 +5,15 @@ import (
 	"math"
 	"strings"
 
+	"github.com/0x4d5352/regolith/internal/analyzer"
 	"github.com/0x4d5352/regolith/internal/parser"
 )
 
 // Renderer handles rendering regex AST to SVG
 type Renderer struct {
-	Config      *Config
-	subexpDepth int // Tracks nesting depth for subexpressions
+	Config       *Config
+	subexpDepth  int // Tracks nesting depth for subexpressions
+	nodeFindings map[parser.Node]*analyzer.Finding
 }
 
 // New creates a new Renderer with the given config
@@ -217,59 +219,62 @@ func (r *Renderer) getStyles() string {
 	)
 }
 
-// renderNode dispatches to the appropriate render method based on node type
+// renderNode dispatches to the appropriate render method based on node type.
+// The result is passed through annotateNode, which overlays severity markers
+// when an analysis report is active (nodeFindings is non-nil).
 func (r *Renderer) renderNode(node parser.Node) RenderedNode {
+	var rendered RenderedNode
 	switch n := node.(type) {
 	case *parser.Regexp:
-		return r.renderRegexp(n)
+		rendered = r.renderRegexp(n)
 	case *parser.Match:
-		return r.renderMatch(n)
+		rendered = r.renderMatch(n)
 	case *parser.MatchFragment:
-		return r.renderMatchFragment(n)
+		rendered = r.renderMatchFragment(n)
 	case *parser.Literal:
-		return r.renderLiteral(n)
+		rendered = r.renderLiteral(n)
 	case *parser.Escape:
-		return r.renderEscape(n)
+		rendered = r.renderEscape(n)
 	case *parser.Anchor:
-		return r.renderAnchor(n)
+		rendered = r.renderAnchor(n)
 	case *parser.AnyCharacter:
-		return r.renderAnyCharacter(n)
+		rendered = r.renderAnyCharacter(n)
 	case *parser.Charset:
-		return r.renderCharset(n)
+		rendered = r.renderCharset(n)
 	case *parser.Subexp:
-		return r.renderSubexp(n)
+		rendered = r.renderSubexp(n)
 	case *parser.BackReference:
-		return r.renderBackReference(n)
+		rendered = r.renderBackReference(n)
 	case *parser.UnicodePropertyEscape:
-		return r.renderUnicodePropertyEscape(n)
+		rendered = r.renderUnicodePropertyEscape(n)
 	case *parser.QuotedLiteral:
-		return r.renderQuotedLiteral(n)
+		rendered = r.renderQuotedLiteral(n)
 	case *parser.Comment:
-		return r.renderComment(n)
+		rendered = r.renderComment(n)
 	case *parser.InlineModifier:
-		return r.renderInlineModifier(n)
+		rendered = r.renderInlineModifier(n)
 	case *parser.BalancedGroup:
-		return r.renderBalancedGroup(n)
+		rendered = r.renderBalancedGroup(n)
 	case *parser.Conditional:
-		return r.renderConditional(n)
+		rendered = r.renderConditional(n)
 	case *parser.RecursiveRef:
-		return r.renderRecursiveRef(n)
+		rendered = r.renderRecursiveRef(n)
 	case *parser.BranchReset:
-		return r.renderBranchReset(n)
+		rendered = r.renderBranchReset(n)
 	case *parser.BacktrackControl:
-		return r.renderBacktrackControl(n)
+		rendered = r.renderBacktrackControl(n)
 	case *parser.Callout:
-		return r.renderCallout(n)
+		rendered = r.renderCallout(n)
 	case *parser.CharsetIntersection:
-		return r.renderCharsetIntersection(n)
+		rendered = r.renderCharsetIntersection(n)
 	case *parser.CharsetSubtraction:
-		return r.renderCharsetSubtraction(n)
+		rendered = r.renderCharsetSubtraction(n)
 	case *parser.CharsetStringDisjunction:
-		return r.renderCharsetStringDisjunction(n)
+		rendered = r.renderCharsetStringDisjunction(n)
 	default:
-		// Fallback: render as a simple label
-		return r.renderLabel(fmt.Sprintf("<%s>", node.Type()), "unknown")
+		rendered = r.renderLabel(fmt.Sprintf("<%s>", node.Type()), "unknown")
 	}
+	return r.annotateNode(node, rendered)
 }
 
 // renderLabel creates a labeled box (used by many node types)
@@ -903,13 +908,15 @@ func (r *Renderer) renderMatch(match *parser.Match) RenderedNode {
 func (r *Renderer) renderMatchFragment(frag *parser.MatchFragment) RenderedNode {
 	content := r.renderNode(frag.Content)
 
+	// Findings may target the MatchFragment node itself (for nested-quantifier,
+	// redundant-group, etc.), so the result is passed through annotateNode.
+	var result RenderedNode
 	if frag.Repeat == nil {
-		// No repeat, just return the content
-		return content
+		result = content
+	} else {
+		result = r.renderWithRepeat(content, frag.Repeat)
 	}
-
-	// Add repeat visualization
-	return r.renderWithRepeat(content, frag.Repeat)
+	return r.annotateNode(frag, result)
 }
 
 // renderWithRepeat adds skip/loop paths for quantifiers
