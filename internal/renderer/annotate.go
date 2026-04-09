@@ -345,20 +345,15 @@ func (r *Renderer) renderLegend(findings []*analyzer.Finding) RenderedNode {
 
 		// Description (indented, slightly smaller).
 		if f.Description != "" {
-			descText := f.Description
-			// Truncate very long descriptions for the SVG legend.
-			if len(descText) > 120 {
-				descText = descText[:117] + "..."
-			}
 			children = append(children, &Text{
 				X:          leftMargin,
 				Y:          y,
-				Content:    descText,
+				Content:    f.Description,
 				FontFamily: cfg.FontFamily,
 				FontSize:   cfg.FontSize - 2,
 				Fill:       "#666",
 			})
-			descW := leftMargin + MeasureText(descText, cfg)
+			descW := leftMargin + MeasureText(f.Description, cfg)
 			if descW > maxWidth {
 				maxWidth = descW
 			}
@@ -367,20 +362,16 @@ func (r *Renderer) renderLegend(findings []*analyzer.Finding) RenderedNode {
 
 		// Suggestion (indented, italic via class).
 		if f.Suggestion != "" {
-			suggText := f.Suggestion
-			if len(suggText) > 120 {
-				suggText = suggText[:117] + "..."
-			}
 			children = append(children, &Text{
 				X:          leftMargin,
 				Y:          y,
-				Content:    suggText,
+				Content:    f.Suggestion,
 				FontFamily: cfg.FontFamily,
 				FontSize:   cfg.FontSize - 2,
 				Fill:       "#888",
 				Class:      "analysis-suggestion",
 			})
-			suggW := leftMargin + MeasureText(suggText, cfg)
+			suggW := leftMargin + MeasureText(f.Suggestion, cfg)
 			if suggW > maxWidth {
 				maxWidth = suggW
 			}
