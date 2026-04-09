@@ -34,6 +34,14 @@ type Config struct {
 	CalloutFill          string
 	BacktrackControlFill string
 	ConditionalFill      string
+
+	// Analysis annotation colors (used by annotated SVG output)
+	ErrorBorderColor   string
+	WarningBorderColor string
+	InfoBorderColor    string
+	ErrorBadgeColor    string
+	WarningBadgeColor  string
+	InfoBadgeColor     string
 }
 
 // DefaultConfig returns the default styling configuration
@@ -80,5 +88,13 @@ func DefaultConfig() *Config {
 		CalloutFill:          "#ffd699", // Light orange
 		BacktrackControlFill: "#ffb3a7", // Light salmon
 		ConditionalFill:      "#b3e5fc", // Light cyan
+
+		// Analysis annotation colors
+		ErrorBorderColor:   "#e53e3e",
+		WarningBorderColor: "#dd6b20",
+		InfoBorderColor:    "#3182ce",
+		ErrorBadgeColor:    "#e53e3e",
+		WarningBadgeColor:  "#dd6b20",
+		InfoBadgeColor:     "#3182ce",
 	}
 }
