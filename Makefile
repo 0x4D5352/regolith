@@ -1,4 +1,4 @@
-.PHONY: build test clean generate install release all
+.PHONY: build test clean generate install release all golden golden-analysis
 
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
@@ -96,6 +96,10 @@ release: clean
 golden:
 	GOLDEN_UPDATE=1 go test ./internal/renderer/...
 
+# Update analysis golden files
+golden-analysis:
+	GOLDEN_UPDATE=1 go test ./internal/output/... ./internal/renderer/...
+
 # Lint code
 lint:
 	@which golangci-lint > /dev/null || (echo "Install golangci-lint: https://golangci-lint.run/usage/install/" && exit 1)
@@ -122,5 +126,6 @@ help:
 	@echo "  clean               - Remove build artifacts"
 	@echo "  release             - Cross-compile for all platforms"
 	@echo "  golden              - Update golden test files"
+	@echo "  golden-analysis     - Update analysis golden files"
 	@echo "  lint                - Run linter"
 	@echo "  fmt                 - Format code"
