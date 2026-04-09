@@ -52,7 +52,20 @@ func primaryEngineCmd(flavorName string) string {
 
 // newExternalEngine creates the appropriate external engine for a flavor.
 // Returns nil if the flavor has no external engine support yet.
-// External engines are added in Tasks 14-15.
+// Java is deferred — it requires compiling a .class file at runtime.
 func newExternalEngine(flavorName, cmd string) Engine {
-	return nil
+	switch flavorName {
+	case "javascript":
+		return &NodeEngine{}
+	case "pcre":
+		return &PythonEngine{UsePCRE: true}
+	case "dotnet":
+		return &PythonEngine{UsePCRE: false}
+	case "posix-bre", "gnugrep-bre":
+		return &GrepEngine{UseBRE: true}
+	case "posix-ere", "gnugrep-ere":
+		return &GrepEngine{UseBRE: false}
+	default:
+		return nil
+	}
 }
