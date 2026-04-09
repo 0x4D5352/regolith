@@ -18,10 +18,6 @@ capabilities, cost, and limitations of Large Language Models. I take no credit f
 any code associated with a commit that contains the `[claude]` flag in the
 description, or that has been co-authored by Claude.
 
-A `codex` branch will contain an alternative version of this repository built from
-the same starting point as this one utilizing OpenAI Codex as a comparison for any
-interested party.
-
 ## Example Results
 
 IPv4 Address:
