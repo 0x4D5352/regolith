@@ -676,6 +676,53 @@ func TestRunFormatJSONNoFileCreated(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// analyze subcommand tests
+// ---------------------------------------------------------------------------
+
+func TestAnalyzeSubcommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr bool
+		wantOut string
+	}{
+		{
+			name:    "basic text output",
+			args:    []string{"regolith", "analyze", ".*.*=.*"},
+			wantErr: false,
+			wantOut: "adjacent-unbounded",
+		},
+		{
+			name:    "json format",
+			args:    []string{"regolith", "analyze", "--format", "json", ".*.*=.*"},
+			wantErr: false,
+			wantOut: `"id": "adjacent-unbounded"`,
+		},
+		{
+			name:    "no pattern",
+			args:    []string{"regolith", "analyze"},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr strings.Builder
+			err := run(tc.args, nil, &stdout, &stderr)
+			if tc.wantErr && err == nil {
+				t.Error("expected error, got nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("unexpected error: %v\nstderr: %s", err, stderr.String())
+			}
+			if tc.wantOut != "" && !strings.Contains(stdout.String(), tc.wantOut) {
+				t.Errorf("output missing %q\ngot: %s", tc.wantOut, stdout.String())
+			}
+		})
+	}
+}
+
 func TestBinaryUnescapeFlag(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.svg")

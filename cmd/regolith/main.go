@@ -6,9 +6,11 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	flag "github.com/spf13/pflag"
 
+	"github.com/0x4d5352/regolith/internal/analyzer"
 	"github.com/0x4d5352/regolith/internal/flavor"
 	"github.com/0x4d5352/regolith/internal/output"
 	"github.com/0x4d5352/regolith/internal/renderer"
@@ -41,6 +43,13 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	// Route to the analyze subcommand before pflag parsing, since it has
+	// its own FlagSet with different defaults (e.g., --format defaults to
+	// "text" instead of "svg").
+	if len(args) > 1 && args[1] == "analyze" {
+		return runAnalyze(args, stdin, stdout, stderr)
+	}
+
 	fs := flag.NewFlagSet("regolith", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -248,4 +257,162 @@ func displayParseError(w io.Writer, pattern string, err error) {
 	} else {
 		_, _ = fmt.Fprintf(w, "\n%s\n", errStr)
 	}
+}
+
+// ================================================================================
+// analyze subcommand
+// ================================================================================
+
+// runAnalyze implements the "regolith analyze" subcommand. It parses the
+// pattern with the selected flavor, runs static analysis, optionally
+// benchmarks runtime performance, and outputs results in text, JSON, or
+// annotated SVG format.
+func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("regolith analyze", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+
+	flavorName := fs.StringP("flavor", "f", "javascript", "Regex flavor")
+	formatName := fs.String("format", "text", "Output format: text, json, svg")
+	outputFile := fs.StringP("output", "o", "", "Output file path (required for svg)")
+	benchmark := fs.Bool("benchmark", false, "Enable runtime benchmarking")
+	timeout := fs.Duration("timeout", 5*time.Second, "Per-input timeout for benchmarking")
+	corpus := fs.StringSlice("corpus", []string{"all"}, "Corpus types: prose, json, yaml, repeated, random, all")
+	// TODO: --corpus-file support for custom corpus input
+	// corpusFile := fs.String("corpus-file", "", "Path to custom corpus file")
+	sizes := fs.IntSlice("sizes", []int{10, 100, 1000, 10000, 100000}, "Input sizes for benchmarking")
+	severity := fs.String("severity", "info", "Minimum severity: info, warning, error, critical")
+
+	padding := fs.Float64P("padding", "p", 10, "Padding around diagram")
+	fontSize := fs.Float64("font-size", 14, "Font size in pixels")
+	lineWidth := fs.Float64("line-width", 2, "Stroke width for lines")
+
+	fs.Usage = func() {
+		_, _ = fmt.Fprintf(stderr, "regolith analyze - Analyze regex performance\n\n")
+		_, _ = fmt.Fprintf(stderr, "Usage:\n")
+		_, _ = fmt.Fprintf(stderr, "  regolith analyze [flags] <pattern>\n\n")
+		_, _ = fmt.Fprintf(stderr, "Flags:\n")
+		fs.PrintDefaults()
+	}
+
+	if err := fs.Parse(args[2:]); err != nil {
+		return err
+	}
+
+	f, ok := flavor.Get(*flavorName)
+	if !ok {
+		_, _ = fmt.Fprintf(stderr, "Error: unknown flavor '%s'\n", *flavorName)
+		return fmt.Errorf("unknown flavor: %s", *flavorName)
+	}
+
+	pattern, err := getInput(fs.Args(), stdin)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+		fs.Usage()
+		return err
+	}
+
+	parsedAST, err := f.Parse(pattern)
+	if err != nil {
+		displayParseError(stderr, pattern, err)
+		return fmt.Errorf("parse error: %w", err)
+	}
+
+	report := analyzer.Analyze(parsedAST, pattern, f.Name(), f.SupportedFeatures())
+
+	if *benchmark {
+		corpusTypes := resolveCorpusTypes(*corpus)
+		engine, isFallback := analyzer.DetectEngine(f.Name())
+		opts := &analyzer.BenchmarkOptions{
+			Pattern: pattern,
+			Timeout: *timeout,
+			Corpus:  corpusTypes,
+			Sizes:   *sizes,
+		}
+		summary := analyzer.RunBenchmark(engine, opts)
+		summary.IsFallback = isFallback
+		report.BenchmarkSummary = summary
+	}
+
+	minSev := parseSeverity(*severity)
+	report.Findings = filterBySeverity(report.Findings, minSev)
+
+	switch *formatName {
+	case "text":
+		markdown := *outputFile != ""
+		text := output.RenderAnalysisText(report, markdown)
+		if *outputFile != "" {
+			if err := os.WriteFile(*outputFile, []byte(text), 0644); err != nil {
+				return fmt.Errorf("writing output: %w", err)
+			}
+			_, _ = fmt.Fprintf(stdout, "Wrote %s\n", *outputFile)
+		} else {
+			_, _ = fmt.Fprint(stdout, text)
+		}
+
+	case "json":
+		jsonStr, err := output.RenderAnalysisJSON(report)
+		if err != nil {
+			return fmt.Errorf("json render: %w", err)
+		}
+		_, _ = fmt.Fprintln(stdout, jsonStr)
+
+	case "svg":
+		if *outputFile == "" {
+			_, _ = fmt.Fprintf(stderr, "Error: --output is required for svg format\n")
+			return fmt.Errorf("--output required for svg")
+		}
+		cfg := renderer.DefaultConfig()
+		cfg.Padding = *padding
+		cfg.FontSize = *fontSize
+		cfg.CharWidth = *fontSize * 0.6
+		cfg.LineWidth = *lineWidth
+		r := renderer.New(cfg)
+		svg := r.RenderAnnotated(parsedAST, report)
+		if err := os.WriteFile(*outputFile, []byte(svg), 0644); err != nil {
+			return fmt.Errorf("writing output: %w", err)
+		}
+		_, _ = fmt.Fprintf(stdout, "Wrote %s\n", *outputFile)
+
+	default:
+		_, _ = fmt.Fprintf(stderr, "Error: unknown format %q\n", *formatName)
+		return fmt.Errorf("unknown format: %s", *formatName)
+	}
+
+	return nil
+}
+
+// resolveCorpusTypes expands "all" to the full list of built-in corpus types.
+func resolveCorpusTypes(requested []string) []string {
+	for _, r := range requested {
+		if r == "all" {
+			return analyzer.CorpusTypes()
+		}
+	}
+	return requested
+}
+
+// parseSeverity converts a severity flag string to the corresponding
+// analyzer.Severity constant.
+func parseSeverity(s string) analyzer.Severity {
+	switch s {
+	case "warning":
+		return analyzer.SeverityWarning
+	case "error":
+		return analyzer.SeverityError
+	case "critical":
+		return analyzer.SeverityCritical
+	default:
+		return analyzer.SeverityInfo
+	}
+}
+
+// filterBySeverity returns only findings at or above the minimum severity.
+func filterBySeverity(findings []*analyzer.Finding, min analyzer.Severity) []*analyzer.Finding {
+	var filtered []*analyzer.Finding
+	for _, f := range findings {
+		if f.Severity >= min {
+			filtered = append(filtered, f)
+		}
+	}
+	return filtered
 }
