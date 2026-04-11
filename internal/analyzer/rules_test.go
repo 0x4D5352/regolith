@@ -111,6 +111,69 @@ func TestRuleNestedQuantifier(t *testing.T) {
 			},
 			wantFindings: 0,
 		},
+		{
+			// Bounded outer × bounded inner — total repetitions capped at 15,
+			// not a backtracking hazard. This is the MAC-address shape.
+			name: "(a{3}){5} bounded × bounded is fine",
+			node: &ast.MatchFragment{
+				Content: &ast.Subexp{
+					GroupType: ast.GroupCapture,
+					Number:    1,
+					Regexp: &ast.Regexp{
+						Matches: []*ast.Match{{
+							Fragments: []*ast.MatchFragment{{
+								Content: &ast.Literal{Text: "a"},
+								Repeat:  &ast.Repeat{Min: 3, Max: 3, Greedy: true},
+							}},
+						}},
+					},
+				},
+				Repeat: &ast.Repeat{Min: 5, Max: 5, Greedy: true},
+			},
+			wantFindings: 0,
+		},
+		{
+			// Bounded outer × unbounded inner — total repetitions still
+			// capped by the outer, so no exponential blowup.
+			name: "(a+){3} bounded outer is fine",
+			node: &ast.MatchFragment{
+				Content: &ast.Subexp{
+					GroupType: ast.GroupCapture,
+					Number:    1,
+					Regexp: &ast.Regexp{
+						Matches: []*ast.Match{{
+							Fragments: []*ast.MatchFragment{{
+								Content: &ast.Literal{Text: "a"},
+								Repeat:  &ast.Repeat{Min: 1, Max: -1, Greedy: true},
+							}},
+						}},
+					},
+				},
+				Repeat: &ast.Repeat{Min: 3, Max: 3, Greedy: true},
+			},
+			wantFindings: 0,
+		},
+		{
+			// Unbounded outer × bounded inner — inner repetition count is
+			// fixed per iteration, so the surface is linear not exponential.
+			name: "(a{3})+ bounded inner is fine",
+			node: &ast.MatchFragment{
+				Content: &ast.Subexp{
+					GroupType: ast.GroupCapture,
+					Number:    1,
+					Regexp: &ast.Regexp{
+						Matches: []*ast.Match{{
+							Fragments: []*ast.MatchFragment{{
+								Content: &ast.Literal{Text: "a"},
+								Repeat:  &ast.Repeat{Min: 3, Max: 3, Greedy: true},
+							}},
+						}},
+					},
+				},
+				Repeat: &ast.Repeat{Min: 1, Max: -1, Greedy: true},
+			},
+			wantFindings: 0,
+		},
 	}
 
 	for _, tc := range tests {
@@ -543,6 +606,161 @@ func TestRuleOverlappingAlternatives(t *testing.T) {
 			checkOverlappingAlternatives(tc.regexp, &findings)
 			if len(findings) != tc.wantFindings {
 				t.Errorf("got %d findings, want %d", len(findings), tc.wantFindings)
+			}
+		})
+	}
+}
+
+func TestRuleRedundantBoundedQuantifier(t *testing.T) {
+	tests := []struct {
+		name         string
+		frag         *ast.MatchFragment
+		wantFindings int
+	}{
+		{
+			name: "{0} matches nothing",
+			frag: &ast.MatchFragment{
+				Content: &ast.Literal{Text: "a"},
+				Repeat:  &ast.Repeat{Min: 0, Max: 0, Greedy: true},
+			},
+			wantFindings: 1,
+		},
+		{
+			name: "{1} is a no-op",
+			frag: &ast.MatchFragment{
+				Content: &ast.Literal{Text: "a"},
+				Repeat:  &ast.Repeat{Min: 1, Max: 1, Greedy: true},
+			},
+			wantFindings: 1,
+		},
+		{
+			name: "{2} is meaningful — don't fire",
+			frag: &ast.MatchFragment{
+				Content: &ast.Literal{Text: "a"},
+				Repeat:  &ast.Repeat{Min: 2, Max: 2, Greedy: true},
+			},
+			wantFindings: 0,
+		},
+		{
+			name: "{1,3} is meaningful — don't fire",
+			frag: &ast.MatchFragment{
+				Content: &ast.Literal{Text: "a"},
+				Repeat:  &ast.Repeat{Min: 1, Max: 3, Greedy: true},
+			},
+			wantFindings: 0,
+		},
+		{
+			name: "unbounded + — don't fire",
+			frag: &ast.MatchFragment{
+				Content: &ast.Literal{Text: "a"},
+				Repeat:  &ast.Repeat{Min: 1, Max: -1, Greedy: true},
+			},
+			wantFindings: 0,
+		},
+		{
+			name: "no quantifier — don't fire",
+			frag: &ast.MatchFragment{
+				Content: &ast.Literal{Text: "a"},
+				Repeat:  nil,
+			},
+			wantFindings: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var findings []*Finding
+			checkRedundantBoundedQuantifier(tc.frag, &findings)
+			if len(findings) != tc.wantFindings {
+				t.Errorf("got %d findings, want %d", len(findings), tc.wantFindings)
+			}
+			for _, f := range findings {
+				if f.ID != "redundant-bounded-quantifier" {
+					t.Errorf("unexpected finding ID: %s", f.ID)
+				}
+			}
+		})
+	}
+}
+
+func TestRuleRepeatedSingleToken(t *testing.T) {
+	mkLit := func(s string) *ast.MatchFragment {
+		return &ast.MatchFragment{Content: &ast.Literal{Text: s}}
+	}
+	mkEsc := func(code string) *ast.MatchFragment {
+		return &ast.MatchFragment{Content: &ast.Escape{Code: code}}
+	}
+
+	tests := []struct {
+		name         string
+		match        *ast.Match
+		wantFindings int
+	}{
+		{
+			name: "three consecutive \\d triggers",
+			match: &ast.Match{Fragments: []*ast.MatchFragment{
+				mkEsc("d"), mkEsc("d"), mkEsc("d"),
+			}},
+			wantFindings: 1,
+		},
+		{
+			name: "four consecutive 'a' triggers once",
+			match: &ast.Match{Fragments: []*ast.MatchFragment{
+				mkLit("a"), mkLit("a"), mkLit("a"), mkLit("a"),
+			}},
+			wantFindings: 1,
+		},
+		{
+			name: "two consecutive is not enough",
+			match: &ast.Match{Fragments: []*ast.MatchFragment{
+				mkLit("a"), mkLit("a"),
+			}},
+			wantFindings: 0,
+		},
+		{
+			name: "mixed tokens — don't fire",
+			match: &ast.Match{Fragments: []*ast.MatchFragment{
+				mkEsc("d"), mkEsc("w"), mkEsc("d"),
+			}},
+			wantFindings: 0,
+		},
+		{
+			name: "two independent runs of three fire twice",
+			match: &ast.Match{Fragments: []*ast.MatchFragment{
+				mkLit("a"), mkLit("a"), mkLit("a"),
+				mkLit("b"), mkLit("b"), mkLit("b"),
+			}},
+			wantFindings: 2,
+		},
+		{
+			name: "quantified fragments don't participate",
+			match: &ast.Match{Fragments: []*ast.MatchFragment{
+				{Content: &ast.Literal{Text: "a"}, Repeat: &ast.Repeat{Min: 1, Max: 1, Greedy: true}},
+				{Content: &ast.Literal{Text: "a"}, Repeat: &ast.Repeat{Min: 1, Max: 1, Greedy: true}},
+				{Content: &ast.Literal{Text: "a"}, Repeat: &ast.Repeat{Min: 1, Max: 1, Greedy: true}},
+			}},
+			wantFindings: 0,
+		},
+		{
+			name: "multi-char literal doesn't collapse",
+			match: &ast.Match{Fragments: []*ast.MatchFragment{
+				mkLit("ab"), mkLit("ab"), mkLit("ab"),
+			}},
+			wantFindings: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var findings []*Finding
+			checkRepeatedSingleToken(tc.match, &findings)
+			if len(findings) != tc.wantFindings {
+				t.Errorf("got %d findings, want %d: %v", len(findings), tc.wantFindings, findingIDs(findings))
+			}
+			for _, f := range findings {
+				if f.ID != "repeated-token" {
+					t.Errorf("unexpected finding ID: %s", f.ID)
+				}
 			}
 		})
 	}

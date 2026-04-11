@@ -194,6 +194,17 @@ regolith analyze --severity warning --format json '(.*)+'
 regolith analyze --format svg -o annotated.svg '(a|a)*b'
 ```
 
+Annotated SVG output overlays severity badges onto the offending nodes
+of a railroad diagram. Two examples:
+
+Nested quantifier (classic catastrophic-backtracking shape `(a+)+b`):
+
+![annotated railroad diagram of (a+)+b showing nested-quantifier and missing-anchor findings](./assets/analyze_nested_quantifier.svg)
+
+Adjacent unbounded quantifiers with leading/trailing wildcards (`.*.*=.*`):
+
+![annotated railroad diagram of .*.*=.* showing adjacent-unbounded, leading-wildcard, and trailing-wildcard findings](./assets/analyze_wildcards.svg)
+
 Benchmarking flags:
 - `--benchmark` — enable runtime measurement
 - `--timeout` — per-input timeout (default `5s`)

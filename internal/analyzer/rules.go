@@ -37,11 +37,18 @@ func checkAdjacentUnbounded(fragments []*ast.MatchFragment, findings *[]*Finding
 	}
 }
 
-// checkNestedQuantifier detects a MatchFragment with a quantifier whose
-// content is a Subexp that itself contains quantified fragments.
+// checkNestedQuantifier detects a MatchFragment with an unbounded quantifier
+// whose content is a Subexp that itself contains an unbounded quantifier.
 // Example: (a+)+ — the outer + and inner + create exponential paths.
+//
+// The check requires BOTH the outer and the inner quantifier to be unbounded
+// (Max == -1). Bounded × bounded cases such as (?:[A-Fa-f\d]{2}){5} (MAC
+// address) have a finite upper repetition count and do not produce
+// catastrophic backtracking. Bounded × unbounded and unbounded × bounded are
+// also excluded because the total repetition count is bounded by the smaller
+// of the two factors being finite.
 func checkNestedQuantifier(frag *ast.MatchFragment, findings *[]*Finding) {
-	if frag.Repeat == nil {
+	if frag.Repeat == nil || frag.Repeat.Max != -1 {
 		return
 	}
 
@@ -50,13 +57,13 @@ func checkNestedQuantifier(frag *ast.MatchFragment, findings *[]*Finding) {
 		return
 	}
 
-	if containsQuantifier(subexp.Regexp) {
+	if containsUnboundedQuantifier(subexp.Regexp) {
 		*findings = append(*findings, &Finding{
 			ID:       "nested-quantifier",
 			Category: CategoryBacktracking,
 			Severity: SeverityError,
 			Title:    "Nested quantifiers",
-			Description: "A quantifier applied to a group that itself contains quantifiers " +
+			Description: "An unbounded quantifier applied to a group that itself contains an unbounded quantifier " +
 				"creates exponential backtracking paths.",
 			Suggestion: "Flatten the expression, use an atomic group (?>...), or use a possessive quantifier if the flavor supports it.",
 			Node:       frag,
@@ -64,20 +71,24 @@ func checkNestedQuantifier(frag *ast.MatchFragment, findings *[]*Finding) {
 	}
 }
 
-// containsQuantifier returns true if the Regexp subtree has any
-// MatchFragment with a non-nil Repeat.
-func containsQuantifier(r *ast.Regexp) bool {
+// containsUnboundedQuantifier returns true if any MatchFragment in the
+// Regexp subtree carries an unbounded Repeat (Max == -1). Bounded
+// quantifiers like {n,m} are intentionally excluded — even when nested
+// inside another bounded quantifier they produce a finite repetition count
+// rather than an exponential backtracking surface.
+func containsUnboundedQuantifier(r *ast.Regexp) bool {
 	if r == nil {
 		return false
 	}
 	for _, m := range r.Matches {
 		for _, f := range m.Fragments {
-			if f.Repeat != nil {
+			if f.Repeat != nil && f.Repeat.Max == -1 {
 				return true
 			}
-			// Recurse into nested subexpressions
+			// Recurse into nested subexpressions so that deeply buried
+			// unbounded quantifiers still count.
 			if sub, ok := f.Content.(*ast.Subexp); ok {
-				if containsQuantifier(sub.Regexp) {
+				if containsUnboundedQuantifier(sub.Regexp) {
 					return true
 				}
 			}
@@ -272,18 +283,25 @@ func checkMissingAnchor(r *ast.Regexp, findings *[]*Finding) {
 	})
 }
 
-// hasAnchor returns true if the Regexp subtree contains any Anchor node.
+// hasAnchor returns true if the Regexp subtree contains any zero-width
+// position assertion. Some flavor parsers (notably JavaScript) emit \b and
+// \B as Escape nodes with EscapeType "word_boundary" / "non_word_boundary"
+// rather than as Anchor nodes, so both shapes must be recognized.
 func hasAnchor(r *ast.Regexp) bool {
 	if r == nil {
 		return false
 	}
 	for _, m := range r.Matches {
 		for _, f := range m.Fragments {
-			if _, ok := f.Content.(*ast.Anchor); ok {
+			switch c := f.Content.(type) {
+			case *ast.Anchor:
 				return true
-			}
-			if sub, ok := f.Content.(*ast.Subexp); ok {
-				if hasAnchor(sub.Regexp) {
+			case *ast.Escape:
+				if c.EscapeType == "word_boundary" || c.EscapeType == "non_word_boundary" {
+					return true
+				}
+			case *ast.Subexp:
+				if hasAnchor(c.Regexp) {
 					return true
 				}
 			}
@@ -451,5 +469,243 @@ func checkUnreachableAlternative(r *ast.Regexp, findings *[]*Finding) {
 			})
 			return
 		}
+	}
+}
+
+// ================================================================================
+// Redundant Bounded Quantifier
+// ================================================================================
+
+// checkRedundantBoundedQuantifier flags quantifiers whose min/max make them
+// no-ops or dead code:
+//
+//   - {0} or {0,0}: the element is never matched — usually a typo.
+//   - {1} or {1,1}: identical in semantics to omitting the quantifier.
+//
+// Unbounded quantifiers (Max == -1) and multi-repetition quantifiers like
+// {2}, {1,3}, {0,5} are left alone — they have real effects.
+func checkRedundantBoundedQuantifier(frag *ast.MatchFragment, findings *[]*Finding) {
+	if frag == nil || frag.Repeat == nil {
+		return
+	}
+	r := frag.Repeat
+	if r.Max == -1 {
+		return
+	}
+
+	switch {
+	case r.Max == 0:
+		*findings = append(*findings, &Finding{
+			ID:          "redundant-bounded-quantifier",
+			Category:    CategoryRedundancy,
+			Severity:    SeverityWarning,
+			Title:       "Zero-repetition quantifier",
+			Description: "A {0} quantifier makes the element match zero times, rendering it dead code.",
+			Suggestion:  "Remove the element or fix the quantifier bounds.",
+			Node:        frag,
+		})
+	case r.Min == 1 && r.Max == 1:
+		*findings = append(*findings, &Finding{
+			ID:          "redundant-bounded-quantifier",
+			Category:    CategoryRedundancy,
+			Severity:    SeverityInfo,
+			Title:       "Redundant {1} quantifier",
+			Description: "A {1} quantifier is identical to omitting the quantifier.",
+			Suggestion:  "Remove the quantifier.",
+			Node:        frag,
+		})
+	}
+}
+
+// ================================================================================
+// Useless Capture
+// ================================================================================
+
+// checkUselessCapture flags capturing groups whose group number/name is not
+// referenced by any backreference or recursive reference in the pattern.
+// The author could use a non-capturing group (?:...) for a small
+// performance win and to make the intent clearer.
+//
+// This is a method on *analysis because it needs the pre-computed used/defined
+// sets from collectGroupMetadata.
+func (a *analysis) checkUselessCapture(frag *ast.MatchFragment) {
+	if frag == nil {
+		return
+	}
+	sub, ok := frag.Content.(*ast.Subexp)
+	if !ok {
+		return
+	}
+	if sub.GroupType != ast.GroupCapture && sub.GroupType != ast.GroupNamedCapture {
+		return
+	}
+
+	// Named capture groups use the name as their identity; numbered capture
+	// groups use the number. If either side matches the used set, the group
+	// is referenced and not "useless".
+	if sub.Name != "" {
+		if a.usedNames[sub.Name] {
+			return
+		}
+	}
+	if sub.Number > 0 {
+		if a.usedNums[sub.Number] {
+			return
+		}
+	}
+
+	a.findings = append(a.findings, &Finding{
+		ID:          "useless-capture",
+		Category:    CategoryPerformance,
+		Severity:    SeverityInfo,
+		Title:       "Capturing group never referenced",
+		Description: "This capturing group is not referenced by any backreference or recursive reference.",
+		Suggestion:  "Use a non-capturing group (?:...) instead if the capture is not needed.",
+		Node:        frag,
+	})
+}
+
+// ================================================================================
+// Invalid Backreference
+// ================================================================================
+
+// checkInvalidBackReferences walks the AST and flags every BackReference
+// whose target group number or name is not defined in the pattern. Runs
+// once from Analyze as a global rule.
+func (a *analysis) checkInvalidBackReferences(r *ast.Regexp) {
+	if r == nil {
+		return
+	}
+	for _, m := range r.Matches {
+		for _, frag := range m.Fragments {
+			if frag == nil {
+				continue
+			}
+			if br, ok := frag.Content.(*ast.BackReference); ok {
+				a.flagInvalidBackRef(br, frag)
+			}
+			// Recurse into node types that nest a Regexp.
+			switch n := frag.Content.(type) {
+			case *ast.Subexp:
+				a.checkInvalidBackReferences(n.Regexp)
+			case *ast.Conditional:
+				a.checkInvalidBackReferences(n.TrueMatch)
+				a.checkInvalidBackReferences(n.FalseMatch)
+			case *ast.BranchReset:
+				a.checkInvalidBackReferences(n.Regexp)
+			case *ast.BalancedGroup:
+				a.checkInvalidBackReferences(n.Regexp)
+			case *ast.InlineModifier:
+				a.checkInvalidBackReferences(n.Regexp)
+			}
+		}
+	}
+}
+
+// flagInvalidBackRef emits a finding when a BackReference's target group is
+// not present in the pattern's defined set.
+func (a *analysis) flagInvalidBackRef(br *ast.BackReference, frag *ast.MatchFragment) {
+	if br.Name != "" {
+		if !a.definedNames[br.Name] {
+			a.findings = append(a.findings, &Finding{
+				ID:          "invalid-backreference",
+				Category:    CategoryCorrectness,
+				Severity:    SeverityError,
+				Title:       "Backreference to undefined group",
+				Description: "This backreference targets a named group that is not defined in the pattern.",
+				Node:        frag,
+			})
+		}
+		return
+	}
+	if br.Number > 0 && !a.definedNums[br.Number] {
+		a.findings = append(a.findings, &Finding{
+			ID:          "invalid-backreference",
+			Category:    CategoryCorrectness,
+			Severity:    SeverityError,
+			Title:       "Backreference to undefined group",
+			Description: "This backreference targets a group number that is not defined in the pattern.",
+			Node:        frag,
+		})
+	}
+}
+
+// ================================================================================
+// Repeated Single Token
+// ================================================================================
+
+// checkRepeatedSingleToken detects three or more consecutive identical,
+// unquantified fragments such as \d\d\d or aaaa, and suggests collapsing
+// them into a single quantified form like \d{3}.
+//
+// Equivalence is determined by a simple signature of the fragment's content:
+// the node type plus its text (for literals and escapes). Fragments with
+// quantifiers never participate — they are already explicit about
+// repetition, and a run of identical quantified elements may be
+// intentional.
+func checkRepeatedSingleToken(m *ast.Match, findings *[]*Finding) {
+	if m == nil || len(m.Fragments) < 3 {
+		return
+	}
+
+	frags := m.Fragments
+	i := 0
+	for i < len(frags) {
+		sig, ok := tokenSignature(frags[i])
+		if !ok {
+			i++
+			continue
+		}
+		// Extend the run as long as following fragments share the signature.
+		j := i + 1
+		for j < len(frags) {
+			nextSig, nextOk := tokenSignature(frags[j])
+			if !nextOk || nextSig != sig {
+				break
+			}
+			j++
+		}
+		if j-i >= 3 {
+			*findings = append(*findings, &Finding{
+				ID:          "repeated-token",
+				Category:    CategoryRedundancy,
+				Severity:    SeverityInfo,
+				Title:       "Repeated identical token",
+				Description: "Three or more consecutive identical tokens can be collapsed into a single quantified form.",
+				Suggestion:  "Replace the run with a {n} quantifier.",
+				Node:        frags[i],
+			})
+		}
+		if j == i {
+			i++
+		} else {
+			i = j
+		}
+	}
+}
+
+// tokenSignature returns a string signature suitable for detecting runs of
+// identical unquantified fragments. Returns ok=false for fragments that
+// carry a quantifier or whose content type does not have a meaningful
+// equality check at this level of detail.
+func tokenSignature(frag *ast.MatchFragment) (string, bool) {
+	if frag == nil || frag.Repeat != nil {
+		return "", false
+	}
+	switch c := frag.Content.(type) {
+	case *ast.Literal:
+		// Only single-character literals count — "ab" followed by "ab"
+		// has different semantics than (?:ab){2} in some engines and is
+		// usually not what the author meant to collapse.
+		if len(c.Text) != 1 {
+			return "", false
+		}
+		return "lit:" + c.Text, true
+	case *ast.Escape:
+		return "esc:" + c.Code, true
+	case *ast.AnyCharacter:
+		return "any", true
+	default:
+		return "", false
 	}
 }
