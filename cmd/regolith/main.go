@@ -15,7 +15,7 @@ import (
 	_ "github.com/0x4d5352/regolith/internal/flavor/posix_ere"
 )
 
-var version = "0.3.0"
+var version = "0.2.0"
 
 func main() {
 	var stdin io.Reader
