@@ -46,8 +46,20 @@ Color Customization:
 
 ## Features
 
-- Visualize regex patterns as clean SVG railroad diagrams
-- **3 output formats**: SVG (visual), JSON (machine-readable), Markdown (human-readable)
+- Visualize regex patterns as clean SVG railroad diagrams with a
+  refreshed visual style — rounded nodes, refined palette, and
+  category-aware colors for literals, charsets, escapes, anchors, and
+  groups
+- **3 output formats**: `text` (ANSI-colored AST walk on stdout, or
+  Markdown when redirected to a file), `svg` (railroad diagram), and
+  `json` (machine-readable)
+- **Built-in themes** for SVG output: catppuccin (mocha, macchiato,
+  frappe, latte), gruvbox (dark, light), and several other curated
+  palettes — selected with `--theme`
+- **ANSI color support** for terminal output with `--color auto`
+  (default), `always`, or `never` — severity labels on `analyze`
+  findings, bold section headers on the text walk, dimmed literals
+  and escapes
 - **8 regex flavors** with dedicated PEG grammars:
   - **JavaScript** (ECMAScript 2018+) - including `v` flag unicode sets
   - **Java** (`java.util.regex.Pattern`)
@@ -57,6 +69,10 @@ Color Customization:
   - **POSIX ERE** (IEEE Std 1003.1)
   - **GNU grep BRE** (BRE with GNU extensions)
   - **GNU grep ERE** (ERE with GNU extensions, like `grep -E`)
+- **`regolith analyze` subcommand**: static analysis of regex patterns
+  with findings (catastrophic backtracking, adjacent unbounded
+  quantifiers, etc.), runtime benchmarking across corpus types, and
+  annotated SVG output
 - Customizable colors and dimensions
 - String literal unescaping for Java/.NET patterns copied from source code
 
@@ -81,11 +97,14 @@ make build
 ### Basic Usage
 
 ```bash
-# Visualize a regex pattern (defaults to JavaScript flavor)
+# Print an ANSI-colored walk of the regex on stdout (default)
 regolith 'a|b|c'
 
-# Specify output file
-regolith -o output.svg '[a-z]+'
+# Write a Markdown outline to a file
+regolith 'a|b|c' -o outline.md
+
+# Render an SVG railroad diagram (requires -o / --output)
+regolith --format svg -o diagram.svg '[a-z]+'
 
 # Read pattern from stdin
 echo '^hello$' | regolith
@@ -93,16 +112,23 @@ echo '^hello$' | regolith
 
 ### Output Formats
 
+`regolith` produces three output formats. The default is `text`, which
+writes an ANSI-colored walk of the AST to stdout — and automatically
+switches to Markdown when redirected to a file via `-o`. The `svg`
+format always requires an explicit `-o` destination.
+
 ```bash
-# SVG railroad diagram (default) - writes to file
+# Text walk on stdout (default)
 regolith 'a|b|c'
-regolith -o output.svg '[a-z]+'
+
+# Same walker, written as Markdown when -o points at a file
+regolith 'a|b|c' -o outline.md
+
+# SVG railroad diagram — always requires -o
+regolith --format svg -o diagram.svg '[a-z]+'
 
 # JSON AST dump - writes to stdout, pipe to jq
 regolith --format json 'foo([a-z]+)' | jq .
-
-# Markdown outline - writes to stdout, pipe to glow
-regolith --format markdown '^hello$' | glow -
 
 # Combine with stdin and flavors
 echo '[a-z]+' | regolith --format json --flavor pcre
@@ -145,33 +171,104 @@ When copying regex patterns from Java or .NET source code, backslashes are doubl
 regolith --flavor java --unescape '\\d+\\.\\d+'
 ```
 
+### Analyzing a Pattern
+
+The `regolith analyze` subcommand runs static analysis on a pattern
+and, optionally, runtime benchmarks. Output defaults to ANSI-colored
+text on stdout. Redirecting to a file via `-o` switches the text
+output to Markdown; `--format json` emits structured findings;
+`--format svg` produces an annotated railroad diagram with severity
+badges layered on the offending nodes.
+
+```bash
+# Static findings only (e.g., catastrophic backtracking warnings)
+regolith analyze '.*.*=.*'
+
+# Include a runtime benchmark across all built-in corpus types
+regolith analyze --benchmark '(a+)+b'
+
+# Filter by minimum severity and emit JSON
+regolith analyze --severity warning --format json '(.*)+'
+
+# Annotated SVG with severity badges
+regolith analyze --format svg -o annotated.svg '(a|a)*b'
+```
+
+Benchmarking flags:
+- `--benchmark` — enable runtime measurement
+- `--timeout` — per-input timeout (default `5s`)
+- `--corpus` — corpus types: `prose`, `json`, `yaml`, `repeated`, `random`, or `all` (default)
+- `--sizes` — input sizes for benchmarking (default `10,100,1000,10000,100000`)
+- `--severity` — filter findings: `info`, `warning`, `error`, `critical`
+
 ### Customization
+
+#### Themes
+
+`regolith` ships with a set of curated color palettes for SVG output.
+Select one with `--theme <name>`:
+
+```bash
+regolith --format svg --theme catppuccin-mocha -o out.svg 'foo(bar|baz)'
+regolith --format svg --theme gruvbox-dark    -o out.svg '[a-z]+'
+```
+
+Available themes:
+- `default` — the built-in refreshed palette (same as omitting `--theme`)
+- `catppuccin-mocha`, `catppuccin-macchiato`, `catppuccin-frappe`,
+  `catppuccin-latte`
+- `gruvbox-dark`, `gruvbox-light`
+- `pastels-dark`, `pastels-light`
+- `high-contrast-dark`, `high-contrast-light`
+- `colorblind-dark`, `colorblind-light`
+
+Run `regolith -h` to see the full list with descriptions as discovered
+from the theme registry.
+
+A theme replaces the color palette wholesale. Individual color flags
+(`--literal-fill`, `--line-color`, etc.) layer on top of a theme, so
+you can tint a single category without rebuilding the whole palette.
+
+#### Terminal colors
+
+When writing the default `text` format to stdout, regolith uses ANSI
+escape codes for bold section headers and dimmed literals. Behavior is
+controlled by `--color`:
+
+```bash
+regolith --color auto   'a|b|c'   # default — colored on TTY, plain when piped
+regolith --color always 'a|b|c'   # force ANSI codes even through pipes
+regolith --color never  'a|b|c'   # plain output even on a TTY
+```
+
+The same flag applies to the `analyze` subcommand's text output and
+to the parser error messages.
 
 #### Colors
 
 ```bash
-regolith --literal-fill '#ff6b6b' --escape-fill '#4ecdc4' 'hello\d+'
+regolith --format svg --literal-fill '#ff6b6b' --escape-fill '#4ecdc4' -o out.svg 'hello\d+'
 ```
 
-Available color flags:
-- `--text-color` - Text color (default: `#000`)
-- `--line-color` - Line/stroke color (default: `#000`)
-- `--literal-fill` - Literal box fill (default: `#ff6b6b`)
-- `--charset-fill` - Character set fill (default: `#cbcbba`)
-- `--escape-fill` - Escape sequence fill (default: `#bada55`)
-- `--anchor-fill` - Anchor box fill (default: `#6b6659`)
+Available color flags (defaults reflect the refreshed palette):
+- `--text-color` - Fallback text color (default: `#000`)
+- `--line-color` - Connector / loop line color (default: `#64748b`)
+- `--literal-fill` - Literal box fill (default: `#fee2e2`)
+- `--charset-fill` - Character set box fill (default: `#f5f0e1`)
+- `--escape-fill` - Escape sequence box fill (default: `#ecfccb`)
+- `--anchor-fill` - Anchor box fill (default: `#334155`)
 - `--subexp-fill` - Outermost subexpression fill (default: `none`; nested groups cycle through distinct colors)
 
 #### Dimensions
 
 ```bash
-regolith --padding 20 -font-size 16 -line-width 3 'pattern'
+regolith --format svg --padding 20 --font-size 16 --line-width 3 -o out.svg 'pattern'
 ```
 
 Available dimension flags:
 - `--padding` - Padding around diagram (default: `10`)
-- `--font-size` - Font size in pixels (default: `14`)
-- `--line-width` - Stroke width for lines (default: `2`)
+- `--font-size` - Font size in pixels (default: `13`)
+- `--line-width` - Stroke width for connectors and loops (default: `1.5`)
 
 ## Supported Features by Flavor
 
@@ -204,98 +301,32 @@ Available dimension flags:
 | Script runs | | | | x | | | | |
 | `\Q...\E` quoted literals | | x | x | x | | | | |
 
-## Development
+## Contributing
 
-### Prerequisites
-
-- Go 1.25 or later
-- [pigeon](https://github.com/mna/pigeon) for parser generation (installed automatically by `make generate`)
-
-### Building and Testing
-
-```bash
-make build                # Build for current platform
-make test                 # Run all tests
-make coverage             # Test with coverage report
-make lint                 # Run linter (requires golangci-lint)
-make fmt                  # Format code
-```
-
-### Parser Generation
-
-Each flavor has a PEG grammar (`grammar.peg`) that is compiled into a Go parser. After modifying any grammar file:
-
-```bash
-make generate             # Regenerate ALL flavor parsers
-make generate-javascript  # Regenerate a single flavor's parser
-```
-
-Do **not** edit `parser.go` files directly - they are auto-generated.
-
-### Updating Golden Tests
-
-When intentionally changing SVG output:
-
-```bash
-make golden
-# or equivalently:
-GOLDEN_UPDATE=1 go test ./internal/renderer/...
-```
-
-When intentionally changing JSON or Markdown output:
-
-```bash
-GOLDEN_UPDATE=1 go test ./internal/output/...
-```
-
-### Project Structure
-
-```
-regolith/
-├── cmd/regolith/              # CLI entry point
-├── internal/
-│   ├── ast/                   # Shared AST node types
-│   │   └── ast.go
-│   ├── flavor/                # Flavor interface and registry
-│   │   ├── flavor.go
-│   │   ├── javascript/        # Each flavor has its own package:
-│   │   │   ├── grammar.peg    #   PEG grammar definition
-│   │   │   ├── parser.go      #   Generated parser (do not edit)
-│   │   │   ├── flavor.go      #   Flavor registration
-│   │   │   ├── helpers.go     #   Parser action helpers
-│   │   │   └── flavor_test.go #   Parser tests
-│   │   ├── java/
-│   │   ├── dotnet/
-│   │   ├── pcre/
-│   │   ├── posix_bre/
-│   │   ├── posix_ere/
-│   │   ├── gnugrep_bre/
-│   │   └── gnugrep_ere/
-│   ├── output/                # Text output formats
-│   │   ├── json.go            #   AST-to-JSON translation
-│   │   ├── markdown.go        #   AST-to-Markdown outline
-│   │   └── testdata/golden/   #   Golden test files (JSON + Markdown)
-│   ├── renderer/              # SVG rendering
-│   │   ├── renderer.go        #   AST-to-SVG dispatch
-│   │   ├── svg.go             #   SVG element types
-│   │   ├── layout.go          #   Bounding box and positioning
-│   │   ├── styles.go          #   Color/dimension configuration
-│   │   └── testdata/golden/   #   Golden test SVGs per flavor
-│   ├── parser/                # Legacy shim (delegates to JS flavor)
-│   └── unescape/              # String literal unescaping
-└── README.md
-```
+Development setup, parser generation workflow, golden-test
+conventions, project structure, and the pull-request process all
+live in [CONTRIBUTING.md](./CONTRIBUTING.md). Please read it before
+opening a pull request.
 
 ## Architecture
 
-regolith uses a parse-then-render pipeline: **PEG grammar -> AST -> SVG / JSON / Markdown**.
+regolith uses a parse-then-render pipeline: **PEG grammar -> AST -> SVG / JSON / text**.
 
 1. Each regex flavor defines a PEG grammar that produces a shared AST
 2. Flavors register themselves via `init()` and are discovered through a central registry
 3. The `--format` flag selects the output backend:
-   - **SVG** — renderer walks the AST and produces SVG elements with bounding box calculations and railroad-style paths
-   - **JSON** — structured dump with a stable consumer-friendly schema (discriminated union via `type` field)
-   - **Markdown** — nested bullet list describing the regex structure in human-readable form
+   - **text** — AST walker produces an outline; ANSI-styled on stdout,
+     Markdown when redirected to a file via `-o`. Default format.
+   - **svg** — renderer walks the AST and produces SVG elements with
+     bounding box calculations and railroad-style paths. Themes and
+     individual color overrides layer on top of the default palette.
+     Requires `-o` with a destination filename.
+   - **json** — structured dump with a stable consumer-friendly schema
+     (discriminated union via `type` field)
+4. `regolith analyze` adds a static analysis pass after parsing, with
+   optional runtime benchmarking. Its output routes through the same
+   text/json/svg backends (annotated SVG overlays severity badges on
+   the offending nodes).
 
 ## License
 
