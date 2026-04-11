@@ -144,7 +144,7 @@ regolith --flavor java --unescape '\\d+\\.\\d+'
 #### Colors
 
 ```bash
-regolith --literal-fill '#ff6b6b' -escape-fill '#4ecdc4' 'hello\d+'
+regolith --literal-fill '#ff6b6b' --escape-fill '#4ecdc4' 'hello\d+'
 ```
 
 Available color flags:
