@@ -117,11 +117,22 @@ func (r *Renderer) RenderAnnotated(root *parser.Regexp, report *analyzer.Analysi
 		Children:  []SVGElement{rendered.Element},
 	}
 
-	children := []SVGElement{
-		startLine,
-		endLine,
-		contentGroup,
+	// Mirror Render()'s background-fill behavior so annotated SVGs get
+	// the same --background-fill treatment as plain renders. Width/
+	// height here use the totalWidth/totalHeight that the SVG root is
+	// built with below, so the rect covers the diagram AND the legend
+	// area underneath.
+	var children []SVGElement
+	if r.Config.BackgroundFill != "" {
+		children = append(children, &Rect{
+			X:      0,
+			Y:      0,
+			Width:  totalWidth,
+			Height: totalHeight,
+			Fill:   r.Config.BackgroundFill,
+		})
 	}
+	children = append(children, startLine, endLine, contentGroup)
 
 	if bannerElement != nil {
 		children = append(children, &Group{

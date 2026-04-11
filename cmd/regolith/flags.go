@@ -57,7 +57,7 @@ func (c *commonFlags) Register(fs *flag.FlagSet, d commonDefaults) {
 	fs.StringVar(&c.Format, "format", d.Format, "Output format: text, json, svg")
 	fs.StringVarP(&c.Output, "output", "o", d.Output, "Output file path")
 	fs.StringVar(&c.Color, "color", "auto", "Color output: auto, always, never")
-	fs.StringVar(&c.Theme, "theme", "", "Color theme (e.g. catppuccin-mocha, gruvbox-dark, default)")
+	fs.StringVar(&c.Theme, "theme", "", "Color theme (e.g. light, dark, catppuccin-mocha, gruvbox-dark)")
 	fs.Float64VarP(&c.Padding, "padding", "p", 10, "Padding around diagram")
 	fs.Float64Var(&c.FontSize, "font-size", 13, "Font size in pixels")
 	fs.Float64Var(&c.LineWidth, "line-width", 1.5, "Stroke width for connectors and loops")
@@ -69,13 +69,14 @@ func (c *commonFlags) Register(fs *flag.FlagSet, d commonDefaults) {
 // shared struct closes that gap — analyze now honors --literal-fill and
 // friends when rendering annotated SVG.
 type svgStyleFlags struct {
-	TextColor   string
-	LineColor   string
-	LiteralFill string
-	CharsetFill string
-	EscapeFill  string
-	AnchorFill  string
-	SubexpFill  string
+	TextColor      string
+	LineColor      string
+	LiteralFill    string
+	CharsetFill    string
+	EscapeFill     string
+	AnchorFill     string
+	SubexpFill     string
+	BackgroundFill string
 }
 
 // Register binds every SVG style flag onto fs. Defaults mirror the
@@ -97,6 +98,8 @@ func (s *svgStyleFlags) Register(fs *flag.FlagSet) {
 		"Anchor box fill color")
 	fs.StringVar(&s.SubexpFill, "subexp-fill", "none",
 		"Outermost subexpression box fill color (nested groups use cycling colors)")
+	fs.StringVar(&s.BackgroundFill, "background-fill", "",
+		"Solid background fill color (hex or CSS name; 'theme' uses the active theme's background; default: off)")
 }
 
 // Apply layers the SVG style overrides onto cfg. Only flags the user
@@ -124,6 +127,17 @@ func (s *svgStyleFlags) Apply(fs *flag.FlagSet, cfg *renderer.Config) {
 	if fs.Changed("subexp-fill") {
 		cfg.SubexpFill = s.SubexpFill
 	}
+	if fs.Changed("background-fill") {
+		// The 'theme' sentinel opts into whatever background the
+		// currently selected theme already wrote to cfg.BackgroundColor.
+		// applyTheme runs before svgStyleFlags.Apply in buildSVGConfig,
+		// so by the time we read it the theme has already spoken.
+		if s.BackgroundFill == "theme" {
+			cfg.BackgroundFill = cfg.BackgroundColor
+		} else {
+			cfg.BackgroundFill = s.BackgroundFill
+		}
+	}
 }
 
 // buildSVGConfig produces a fully-configured renderer.Config from the
@@ -145,17 +159,19 @@ func buildSVGConfig(fs *flag.FlagSet, common *commonFlags, style *svgStyleFlags)
 }
 
 // applyTheme resolves a theme name and applies it to cfg. An empty
-// string or the literal "default" are both no-ops so a user can type
-// `--theme default` explicitly to opt out of any future config-file
-// or env-var theme selection. An unknown theme produces an error
-// listing every registered theme.
+// string is a no-op: DefaultConfig()'s built-in palette (which matches
+// the registered "light" theme byte-for-byte) is used as-is. Any
+// non-empty name must resolve via the theme registry — there is no
+// "default" alias, so a future config-file or env-var layer can
+// promote a real theme to install-wide default without fighting a
+// shim.
 func applyTheme(cfg *renderer.Config, name string) error {
-	if name == "" || name == "default" {
+	if name == "" {
 		return nil
 	}
 	t, ok := theme.Get(name)
 	if !ok {
-		return fmt.Errorf("unknown theme %q (available: default, %s)",
+		return fmt.Errorf("unknown theme %q (available: %s)",
 			name, strings.Join(theme.List(), ", "))
 	}
 	t.Apply(cfg)

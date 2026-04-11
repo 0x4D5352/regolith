@@ -146,11 +146,21 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 		Children:  []SVGElement{rendered.Element},
 	}
 
-	children := []SVGElement{
-		startLine,
-		endLine,
-		contentGroup,
+	// When BackgroundFill is set, prepend a full-viewBox rect so it
+	// paints behind every other child. Width/height here are the final
+	// SVG dimensions, already adjusted above for the banner and flags
+	// add-ons, so the rect covers the entire visible surface.
+	var children []SVGElement
+	if r.Config.BackgroundFill != "" {
+		children = append(children, &Rect{
+			X:      0,
+			Y:      0,
+			Width:  width,
+			Height: height,
+			Fill:   r.Config.BackgroundFill,
+		})
 	}
+	children = append(children, startLine, endLine, contentGroup)
 
 	// Add banner if present
 	if bannerElement != nil {

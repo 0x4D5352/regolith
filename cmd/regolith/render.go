@@ -49,7 +49,6 @@ func runRender(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 			_, _ = fmt.Fprintf(stderr, "  %-12s %s\n", name, f.Description())
 		}
 		_, _ = fmt.Fprintf(stderr, "\nAvailable themes:\n")
-		_, _ = fmt.Fprintf(stderr, "  %-22s %s\n", "default", "Built-in palette (refreshed visual style)")
 		for _, name := range theme.List() {
 			t, _ := theme.Get(name)
 			_, _ = fmt.Fprintf(stderr, "  %-22s %s\n", name, t.Description())

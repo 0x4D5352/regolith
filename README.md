@@ -20,6 +20,12 @@ description, or that has been co-authored by Claude.
 
 ## Example Results
 
+> Examples in this README are rendered with `--theme dark
+> --background-fill '#000000'` so they stay legible against GitHub's
+> dark-mode README background. The out-of-the-box experience (no
+> flags) is the light palette on a transparent background — see
+> [Themes](#themes) to pick a different look.
+
 IPv4 Address:
 
 ![example of ipv4 regex railroad diagram](./assets/ipv4.svg)
@@ -225,7 +231,10 @@ regolith --format svg --theme gruvbox-dark    -o out.svg '[a-z]+'
 ```
 
 Available themes:
-- `default` — the built-in refreshed palette (same as omitting `--theme`)
+- `light` — regolith's refreshed light palette (same as omitting
+  `--theme`)
+- `dark` — regolith's slate-900 dark counterpart with bright accent
+  strokes and a pale-pill anchor
 - `catppuccin-mocha`, `catppuccin-macchiato`, `catppuccin-frappe`,
   `catppuccin-latte`
 - `gruvbox-dark`, `gruvbox-light`
@@ -239,6 +248,26 @@ from the theme registry.
 A theme replaces the color palette wholesale. Individual color flags
 (`--literal-fill`, `--line-color`, etc.) layer on top of a theme, so
 you can tint a single category without rebuilding the whole palette.
+
+#### Background fill
+
+SVG output is transparent by default, which can hurt legibility on a
+dark page background. Use `--background-fill` to paint a solid
+rectangle behind the entire diagram:
+
+```bash
+# Explicit color (hex or CSS name)
+regolith --format svg --theme dark --background-fill '#000000' \
+  -o out.svg 'foo(bar|baz)+'
+
+# 'theme' adopts the active theme's own background color
+regolith --format svg --theme catppuccin-mocha --background-fill theme \
+  -o out.svg 'foo'
+```
+
+The flag defaults to off, so existing invocations keep their
+transparent output. The rectangle spans the full viewBox and paints
+behind every other SVG child, including the analyze overlay legend.
 
 #### Terminal colors
 
@@ -269,6 +298,7 @@ Available color flags (defaults reflect the refreshed palette):
 - `--escape-fill` - Escape sequence box fill (default: `#ecfccb`)
 - `--anchor-fill` - Anchor box fill (default: `#334155`)
 - `--subexp-fill` - Outermost subexpression fill (default: `none`; nested groups cycle through distinct colors)
+- `--background-fill` - Solid background rectangle color (default: off; accepts a hex/CSS color or `theme` to adopt the active theme's background)
 
 #### Dimensions
 

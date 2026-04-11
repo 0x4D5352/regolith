@@ -19,10 +19,12 @@ var expectedThemes = []string{
 	"catppuccin-mocha",
 	"colorblind-dark",
 	"colorblind-light",
+	"dark",
 	"gruvbox-dark",
 	"gruvbox-light",
 	"high-contrast-dark",
 	"high-contrast-light",
+	"light",
 	"pastels-dark",
 	"pastels-light",
 }
@@ -143,6 +145,13 @@ func TestApplyPreservesNonColorFields(t *testing.T) {
 			}
 			if cfg.LabelCharWidth != base.LabelCharWidth {
 				t.Errorf("LabelCharWidth changed: %v -> %v", base.LabelCharWidth, cfg.LabelCharWidth)
+			}
+
+			// BackgroundFill is a render-time instruction set by the
+			// --background-fill CLI flag. Themes are advisory via
+			// BackgroundColor and must never poke this field.
+			if cfg.BackgroundFill != base.BackgroundFill {
+				t.Errorf("BackgroundFill changed: %q -> %q", base.BackgroundFill, cfg.BackgroundFill)
 			}
 
 			// Stroke / shape

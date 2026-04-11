@@ -53,7 +53,19 @@ type Config struct {
 	// ================================================================
 	// Global stroke / background
 	// ================================================================
+	// BackgroundColor is theme-advisory metadata: each theme sets it to
+	// the background color it was designed against. It is not rendered
+	// directly — the renderer only emits a background <rect> when
+	// BackgroundFill is non-empty. Keeping these two fields separate
+	// means a theme can suggest a background color without forcing every
+	// rendered SVG (including historical golden files) to suddenly grow
+	// an opaque backdrop.
 	BackgroundColor string
+	// BackgroundFill, when non-empty, causes the renderer to inject a
+	// <rect> filling the entire viewBox as the first child of the root
+	// <svg>. Set by the --background-fill CLI flag; themes leave it
+	// alone.
+	BackgroundFill  string
 	TextColor       string  // Fallback for text without a category color
 	NodeStrokeWidth float64 // Default stroke width for node borders
 

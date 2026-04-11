@@ -7,6 +7,74 @@ import (
 	"github.com/0x4d5352/regolith/internal/parser"
 )
 
+// TestRenderBackgroundFill exercises the background-rect injection
+// path added for --background-fill. When BackgroundFill is unset, the
+// rendered SVG must not contain a full-viewBox rect (historical
+// behavior, protects every pre-existing golden file). When it is set,
+// a rect with x="0" y="0" must appear before the first connector line,
+// using the configured fill color.
+func TestRenderBackgroundFill(t *testing.T) {
+	ast, err := parser.ParseRegex("abc")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	// Node rects (e.g. <g class="literal"><rect .../>) live inside
+	// class groups and inherit fill via <style>. The background rect
+	// is the only one in a rendered SVG that carries an inline fill
+	// attribute, so we use that as the distinguishing signal rather
+	// than the coordinate, which is ambiguous inside translated groups.
+
+	t.Run("unset produces no background rect", func(t *testing.T) {
+		cfg := DefaultConfig()
+		svg := New(cfg).Render(ast)
+		if hasInlineFilledRect(svg) {
+			t.Errorf("unexpected inline-filled rect in unfilled render:\n%s", svg)
+		}
+	})
+
+	t.Run("set injects rect with configured fill", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.BackgroundFill = "#000000"
+		svg := New(cfg).Render(ast)
+
+		if !strings.Contains(svg, `<rect x="0" y="0" width="95" height="43" fill="#000000"`) {
+			t.Errorf("expected background rect with full-viewBox dimensions and black fill, got:\n%s", svg)
+		}
+		// The background rect must appear before the first connector
+		// line so it paints behind every other child.
+		rectIdx := strings.Index(svg, `fill="#000000"`)
+		lineIdx := strings.Index(svg, "<line")
+		if rectIdx == -1 || lineIdx == -1 || rectIdx > lineIdx {
+			t.Errorf("background rect must precede first <line; rect=%d line=%d", rectIdx, lineIdx)
+		}
+	})
+}
+
+// hasInlineFilledRect returns true if the SVG contains any <rect ...
+// fill="..."/> element — i.e., a rect that was rendered by the
+// renderer's Rect SVGElement with an explicit Fill, rather than a
+// node-class rect whose fill comes from a <style> rule.
+func hasInlineFilledRect(svg string) bool {
+	i := 0
+	for {
+		start := strings.Index(svg[i:], "<rect ")
+		if start == -1 {
+			return false
+		}
+		start += i
+		end := strings.Index(svg[start:], "/>")
+		if end == -1 {
+			return false
+		}
+		tag := svg[start : start+end]
+		if strings.Contains(tag, ` fill="`) {
+			return true
+		}
+		i = start + end + 2
+	}
+}
+
 func TestRenderLiteral(t *testing.T) {
 	ast, err := parser.ParseRegex("abc")
 	if err != nil {

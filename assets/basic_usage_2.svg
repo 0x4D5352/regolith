@@ -1,28 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="156.2" height="71" viewBox="0 0 156.2 71"><defs><marker id="start-arrow" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/></marker><marker id="end-dot" markerWidth="8" markerHeight="8" refX="4" refY="4"><circle cx="4" cy="4" r="3" fill="#64748b"/></marker></defs><style>
-		.literal rect { fill: #fee2e2; stroke: #ef4444; stroke-width: 1.5; }
-		.literal text { fill: #991b1b; }
-		.escape rect { fill: #ecfccb; stroke: #84cc16; stroke-width: 1.5; }
-		.escape text { fill: #365314; }
-		.charset rect { fill: #f5f0e1; stroke: #a39e8a; stroke-width: 1.5; }
-		.charset text { fill: #57534e; }
-		.anchor rect { fill: #334155; stroke: #1e293b; stroke-width: 1.5; }
-		.anchor text { fill: #e2e8f0; }
-		.any-character rect { fill: #dbeafe; stroke: #3b82f6; stroke-width: 1.5; }
-		.any-character text { fill: #1e3a5f; }
-		.flags rect { fill: #dbeafe; stroke: #3b82f6; stroke-width: 1.5; }
-		.flags text { fill: #1e3a5f; }
-		.recursive-ref rect { fill: #ede9fe; stroke: #8b5cf6; stroke-width: 1.5; }
-		.recursive-ref text { fill: #4c1d95; }
-		.callout rect { fill: #fff7ed; stroke: #f97316; stroke-width: 1.5; }
-		.callout text { fill: #7c2d12; }
-		.backtrack-control rect { fill: #fee2e2; stroke: #ef4444; stroke-width: 1.5; }
-		.backtrack-control text { fill: #991b1b; }
-		.conditional rect { fill: #e0f2fe; stroke: #0ea5e9; stroke-width: 1.5; }
-		.conditional text { fill: #0c4a6e; }
-		.comment rect { fill: #f3f4f6; stroke: #9ca3af; stroke-width: 1.5; stroke-dasharray: 4,2; }
-		.comment text { fill: #6b7280; }
+<svg xmlns="http://www.w3.org/2000/svg" width="176.2" height="91" viewBox="0 0 176.2 91"><defs><marker id="start-arrow" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/></marker><marker id="end-dot" markerWidth="8" markerHeight="8" refX="4" refY="4"><circle cx="4" cy="4" r="3" fill="#94a3b8"/></marker></defs><style>
+		.literal rect { fill: #3f1d1d; stroke: #ef4444; stroke-width: 1.5; }
+		.literal text { fill: #fecaca; }
+		.escape rect { fill: #1a3e1f; stroke: #84cc16; stroke-width: 1.5; }
+		.escape text { fill: #d9f99d; }
+		.charset rect { fill: #3d3a2a; stroke: #a39e8a; stroke-width: 1.5; }
+		.charset text { fill: #e7e5e4; }
+		.anchor rect { fill: #cbd5e1; stroke: #e2e8f0; stroke-width: 1.5; }
+		.anchor text { fill: #0f172a; }
+		.any-character rect { fill: #172554; stroke: #3b82f6; stroke-width: 1.5; }
+		.any-character text { fill: #bfdbfe; }
+		.flags rect { fill: #172554; stroke: #3b82f6; stroke-width: 1.5; }
+		.flags text { fill: #bfdbfe; }
+		.recursive-ref rect { fill: #2e1065; stroke: #8b5cf6; stroke-width: 1.5; }
+		.recursive-ref text { fill: #ddd6fe; }
+		.callout rect { fill: #431407; stroke: #f97316; stroke-width: 1.5; }
+		.callout text { fill: #fed7aa; }
+		.backtrack-control rect { fill: #3f1d1d; stroke: #ef4444; stroke-width: 1.5; }
+		.backtrack-control text { fill: #fecaca; }
+		.conditional rect { fill: #082f49; stroke: #0ea5e9; stroke-width: 1.5; }
+		.conditional text { fill: #bae6fd; }
+		.comment rect { fill: #1f2937; stroke: #6b7280; stroke-width: 1.5; stroke-dasharray: 4,2; }
+		.comment text { fill: #9ca3af; }
 		.comment text { font-style: italic; }
-		text { font-family: monospace; font-size: 13px; fill: #000; }
+		text { font-family: monospace; font-size: 13px; fill: #e2e8f0; }
 		.subexp-label, .charset-label, .flags-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; }
-		.repeat-label { fill: #64748b; font-family: system-ui, -apple-system, sans-serif; font-size: 11px; }
-	</style><line x1="5" y1="35.5" x2="25" y2="35.5" stroke="#64748b" stroke-width="1.5" marker-start="url(#start-arrow)"/><line x1="135.2" y1="35.5" x2="148.2" y2="35.5" stroke="#64748b" stroke-width="1.5" marker-end="url(#end-dot)"/><g transform="translate(25,10)"><g class="match"><g class="charset"><rect x="0" y="0" width="110.2" height="51" rx="8" ry="8"/><text x="10" y="13" font-family="system-ui, -apple-system, sans-serif" font-size="11" class="charset-label">One of:</text><text x="55.1" y="36" font-family="monospace" font-size="13" text-anchor="middle">&#34;a&#34; - &#34;z&#34;</text></g></g></g></svg>
+		.repeat-label { fill: #94a3b8; font-family: system-ui, -apple-system, sans-serif; font-size: 11px; }
+	</style><rect x="0" y="0" width="176.2" height="91" fill="#000000"/><line x1="5" y1="35.5" x2="25" y2="35.5" stroke="#94a3b8" stroke-width="1.5" marker-start="url(#start-arrow)"/><line x1="155.2" y1="35.5" x2="168.2" y2="35.5" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#end-dot)"/><g transform="translate(25,10)"><g class="match"><g class="repeat"><path d="M 130.2 25.5 Q 130.2 61 120.2 61 H 10 Q 0 61 0 25.5" fill="none" stroke="#94a3b8" stroke-width="1.5" class="loop-path"/><path d="M 70.1 56 L 65.1 61 L 70.1 66" fill="none" stroke="#94a3b8" stroke-width="1.5"/><g transform="translate(10,0)"><g class="charset"><rect x="0" y="0" width="110.2" height="51" rx="8" ry="8"/><text x="10" y="13" font-family="system-ui, -apple-system, sans-serif" font-size="11" class="charset-label">One of:</text><text x="55.1" y="36" font-family="monospace" font-size="13" text-anchor="middle">&#34;a&#34; - &#34;z&#34;</text></g></g><line x1="0" y1="25.5" x2="10" y2="25.5" stroke="#94a3b8" stroke-width="1.5"/><line x1="120.2" y1="25.5" x2="130.2" y2="25.5" stroke="#94a3b8" stroke-width="1.5"/></g></g></g></svg>
