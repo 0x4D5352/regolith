@@ -49,12 +49,12 @@ func TestLdflagsDoNotAffectSVGOutput(t *testing.T) {
 	plainSVG := filepath.Join(dir, "plain.svg")
 	ldflagSVG := filepath.Join(dir, "ldflag.svg")
 
-	run := exec.Command(plainBin, "-f", "java", "-o", plainSVG, pattern)
+	run := exec.Command(plainBin, "--format", "svg", "-f", "java", "-o", plainSVG, pattern)
 	if out, err := run.CombinedOutput(); err != nil {
 		t.Fatalf("plain binary run failed: %v\n%s", err, out)
 	}
 
-	run = exec.Command(ldflagBin, "-f", "java", "-o", ldflagSVG, pattern)
+	run = exec.Command(ldflagBin, "--format", "svg", "-f", "java", "-o", ldflagSVG, pattern)
 	if out, err := run.CombinedOutput(); err != nil {
 		t.Fatalf("ldflag binary run failed: %v\n%s", err, out)
 	}

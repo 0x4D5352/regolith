@@ -22,7 +22,7 @@ func TestRunValidPattern(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-o", out, "a|b|c"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "-o", out, "a|b|c"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -56,7 +56,7 @@ func TestRunFlavorFlag(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "--flavor", "java", "-o", out, "[a-z]+"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "--flavor", "java", "-o", out, "[a-z]+"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error with java flavor, got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -73,7 +73,7 @@ func TestRunAllFlavors(t *testing.T) {
 			out := filepath.Join(dir, "out.svg")
 
 			var stdout, stderr bytes.Buffer
-			err := run([]string{"regolith", "--flavor", name, "-o", out, "abc"}, nil, &stdout, &stderr)
+			err := run([]string{"regolith", "--format", "svg", "--flavor", name, "-o", out, "abc"}, nil, &stdout, &stderr)
 			if err != nil {
 				t.Fatalf("flavor %s failed on basic pattern: %v\nstderr: %s", name, err, stderr.String())
 			}
@@ -105,7 +105,7 @@ func TestRunOutputFile(t *testing.T) {
 	out := filepath.Join(dir, "custom-name.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-o", out, "hello"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "-o", out, "hello"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestRunStdinInput(t *testing.T) {
 
 	stdin := strings.NewReader("a|b\n")
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-o", out}, stdin, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "-o", out}, stdin, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error reading from stdin, got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -142,7 +142,7 @@ func TestRunStdinAndArgs(t *testing.T) {
 	// Provide both args and stdin; args should take priority
 	stdin := strings.NewReader("x|y\n")
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-o", out, "a|b"}, stdin, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "-o", out, "a|b"}, stdin, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
 	}
@@ -202,7 +202,7 @@ func TestRunSVGContent(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-o", out, "[a-z]+"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "-o", out, "[a-z]+"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -231,6 +231,7 @@ func TestRunCustomColors(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	err := run([]string{
 		"regolith",
+		"--format", "svg",
 		"-o", out,
 		"--text-color", "#fff",
 		"--line-color", "#333",
@@ -278,7 +279,7 @@ func TestBinaryValidPattern(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.svg")
 
-	cmd := exec.Command(binaryPath, "-o", out, "a|b|c")
+	cmd := exec.Command(binaryPath, "--format", "svg", "-o", out, "a|b|c")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("binary exited with error: %v\noutput: %s", err, output)
@@ -343,7 +344,7 @@ func TestBinaryStdin(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.svg")
 
-	cmd := exec.Command(binaryPath, "-o", out)
+	cmd := exec.Command(binaryPath, "--format", "svg", "-o", out)
 	cmd.Stdin = strings.NewReader("a|b\n")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -376,7 +377,7 @@ func TestBinaryFlavorFlag(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	// Use PCRE-specific lookbehind syntax
-	cmd := exec.Command(binaryPath, "--flavor", "pcre", "-o", out, "(?<=foo)bar")
+	cmd := exec.Command(binaryPath, "--format", "svg", "--flavor", "pcre", "-o", out, "(?<=foo)bar")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("expected exit 0 for pcre flavor, got: %v\noutput: %s", err, output)
@@ -397,7 +398,7 @@ func TestRunUnescapeFlag(t *testing.T) {
 
 	// Pattern with double escapes + -unescape flag: should produce SVG, no warning
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "--flavor", "java", "--unescape", "-o", out, `\\d+\\.\\d+`}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "--flavor", "java", "--unescape", "-o", out, `\\d+\\.\\d+`}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error with -unescape, got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -417,7 +418,7 @@ func TestRunDoubleEscapeWarningJava(t *testing.T) {
 
 	// Java flavor with double escapes but no -unescape flag: should warn
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "--flavor", "java", "-o", out, `\\d+`}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "--flavor", "java", "-o", out, `\\d+`}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error (warning only), got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -433,7 +434,7 @@ func TestRunDoubleEscapeWarningDotnet(t *testing.T) {
 
 	// Dotnet flavor with double escapes but no -unescape flag: should warn
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "--flavor", "dotnet", "-o", out, `\\d+`}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "--flavor", "dotnet", "-o", out, `\\d+`}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error (warning only), got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -449,7 +450,7 @@ func TestRunNoWarningForJavaScript(t *testing.T) {
 
 	// JavaScript flavor with double escapes: no warning expected
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "--flavor", "javascript", "-o", out, `\\d+`}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "--flavor", "javascript", "-o", out, `\\d+`}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
 	}
@@ -465,7 +466,7 @@ func TestRunNoWarningWithoutDoubleEscapes(t *testing.T) {
 
 	// Java flavor without double escapes: no warning expected
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "--flavor", "java", "-o", out, `\d+`}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "--flavor", "java", "-o", out, `\d+`}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
 	}
@@ -484,7 +485,7 @@ func TestRunFlagsAfterPattern(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "a|b|c", "--output", out}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "a|b|c", "--output", out}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error with flags after pattern, got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -499,7 +500,7 @@ func TestRunMixedFlagPositions(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "--flavor", "java", "[a-z]+", "--output", out}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "--flavor", "java", "[a-z]+", "--output", out}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error with mixed flag positions, got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -514,7 +515,7 @@ func TestRunShortFlags(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "-o", out, "-f", "java", "[a-z]+"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "-o", out, "-f", "java", "[a-z]+"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error with short flags, got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -530,7 +531,7 @@ func TestRunDoubleDashSeparator(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	// Pattern starts with dash; use -- to separate it from flags
-	err := run([]string{"regolith", "--output", out, "--", "-abc"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "--output", out, "--", "-abc"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error with -- separator, got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -545,7 +546,7 @@ func TestRunColorFlagsAfterPattern(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "--output", out, "hello", "--literal-fill", "#ff0000"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "--output", out, "hello", "--literal-fill", "#ff0000"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error with color flags after pattern, got: %v\nstderr: %s", err, stderr.String())
 	}
@@ -591,19 +592,43 @@ func TestRunFormatJSON(t *testing.T) {
 	}
 }
 
-func TestRunFormatMarkdown(t *testing.T) {
+// TestRunTextToFileIsMarkdown verifies that the text format switches
+// to Markdown output when redirected to a file via -o. This is the
+// dual-mode behavior that replaced the old --format markdown.
+func TestRunTextToFileIsMarkdown(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "outline.md")
+
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "--format", "markdown", "^hello$"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "text", "-o", out, "^hello$"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v\nstderr: %s", err, stderr.String())
 	}
 
-	out := stdout.String()
-	if !strings.HasPrefix(out, "# Regex:") {
-		t.Errorf("expected markdown to start with '# Regex:', got: %s", out[:min(50, len(out))])
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
 	}
-	if !strings.Contains(out, "**Flavor:**") {
-		t.Error("expected markdown to contain '**Flavor:**'")
+	content := string(data)
+	if !strings.HasPrefix(content, "# Regex:") {
+		t.Errorf("expected file to start with '# Regex:', got: %s", content[:min(50, len(content))])
+	}
+	if !strings.Contains(content, "**Flavor:**") {
+		t.Error("expected file to contain '**Flavor:**'")
+	}
+}
+
+// TestRunMarkdownFormatIsRemoved guards against accidentally reintroducing
+// the legacy --format markdown option. Its role has been subsumed by
+// --format text -o file.md (see TestRunTextToFileIsMarkdown).
+func TestRunMarkdownFormatIsRemoved(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--format", "markdown", "^hello$"}, nil, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error for removed markdown format, got nil")
+	}
+	if !strings.Contains(stderr.String(), "unknown format") {
+		t.Errorf("expected 'unknown format' error, got: %s", stderr.String())
 	}
 }
 
@@ -636,27 +661,32 @@ func TestRunFormatUnknown(t *testing.T) {
 	if !strings.Contains(stderrStr, "unknown format") {
 		t.Errorf("expected stderr to mention 'unknown format', got: %s", stderrStr)
 	}
-	if !strings.Contains(stderrStr, "Available: svg, json, markdown") {
+	if !strings.Contains(stderrStr, "Available: json, svg, text") {
 		t.Errorf("expected stderr to list available formats, got: %s", stderrStr)
 	}
 }
 
-func TestRunDefaultFormatIsSVG(t *testing.T) {
-	dir := t.TempDir()
-	out := filepath.Join(dir, "out.svg")
-
+// TestRunDefaultFormatIsText covers the standardized default behavior:
+// bare `regolith <pattern>` prints a text walk to stdout and does not
+// touch the filesystem. Previously the default was svg and the binary
+// would quietly create `regex.svg` in the working directory.
+func TestRunDefaultFormatIsText(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	// No --format flag: should behave like --format svg
-	err := run([]string{"regolith", "-o", out, "hello"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--color", "never", "hello"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v\nstderr: %s", err, stderr.String())
 	}
 
-	if _, err := os.Stat(out); os.IsNotExist(err) {
-		t.Fatal("expected SVG output file when no --format specified")
+	out := stdout.String()
+	if out == "" {
+		t.Fatal("expected text output on stdout, got empty")
 	}
-	if !strings.Contains(stdout.String(), "Wrote") {
-		t.Errorf("expected stdout to contain 'Wrote', got: %s", stdout.String())
+	if !strings.Contains(out, "Regex: hello") {
+		t.Errorf("expected text banner 'Regex: hello', got: %s", out)
+	}
+	if _, err := os.Stat("regex.svg"); err == nil {
+		t.Error("default should not write regex.svg to cwd anymore")
+		_ = os.Remove("regex.svg")
 	}
 }
 
@@ -755,7 +785,7 @@ func TestRunColorNever(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "--color", "never", "-o", out, "a|b"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "--color", "never", "-o", out, "a|b"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
 	}
@@ -770,7 +800,7 @@ func TestRunColorAlways(t *testing.T) {
 	out := filepath.Join(dir, "out.svg")
 
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"regolith", "--color", "always", "-o", out, "a|b"}, nil, &stdout, &stderr)
+	err := run([]string{"regolith", "--format", "svg", "--color", "always", "-o", out, "a|b"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
 	}
@@ -803,7 +833,7 @@ func TestBinaryUnescapeFlag(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.svg")
 
-	cmd := exec.Command(binaryPath, "--flavor", "java", "--unescape", "-o", out, `\\d+\\.\\d+`)
+	cmd := exec.Command(binaryPath, "--format", "svg", "--flavor", "java", "--unescape", "-o", out, `\\d+\\.\\d+`)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -818,5 +848,118 @@ func TestBinaryUnescapeFlag(t *testing.T) {
 
 	if strings.Contains(stderr.String(), "Note:") {
 		t.Error("expected no warning with -unescape flag")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// New tests for standardized output behavior (text default, svg requires -o)
+// ---------------------------------------------------------------------------
+
+// TestRunTextToStdoutColorNever covers the default path — ANSI stripped
+// when --color never is set, so assertions on walker content are
+// deterministic.
+func TestRunTextToStdoutColorNever(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--format", "text", "--color", "never", "a|b"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+	out := stdout.String()
+	if strings.Contains(out, "\x1b[") {
+		t.Errorf("expected no ANSI codes under --color never, got: %q", out)
+	}
+	if !strings.Contains(out, "Regex: a|b") {
+		t.Errorf("expected banner 'Regex: a|b' in output, got: %s", out)
+	}
+	if !strings.Contains(out, "Alternation") {
+		t.Errorf("expected walker to describe alternation, got: %s", out)
+	}
+}
+
+// TestRunTextToStdoutColorAlways forces ANSI output so we can verify
+// the walker's post-processing actually emits escape codes.
+func TestRunTextToStdoutColorAlways(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--format", "text", "--color", "always", "a|b"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "\x1b[") {
+		t.Errorf("expected ANSI escape codes with --color always, got: %s", stdout.String())
+	}
+}
+
+// TestRunDefaultTextWithOutputWritesMarkdown verifies that even without
+// --format text, the implicit default + -o routes to a Markdown file
+// (since text is the default format).
+func TestRunDefaultTextWithOutputWritesMarkdown(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "outline.md")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "-o", out, "a|b"}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	if !strings.HasPrefix(string(data), "# Regex:") {
+		t.Errorf("expected markdown header in file, got: %s", string(data)[:min(50, len(data))])
+	}
+}
+
+// TestRunSVGRequiresOutput guards the behavior flip: svg no longer
+// defaults to regex.svg, so --format svg without -o must error.
+func TestRunSVGRequiresOutput(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "--format", "svg", "hello"}, nil, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error when --format svg has no -o, got nil")
+	}
+	if !strings.Contains(stderr.String(), "--output") {
+		t.Errorf("expected error to mention --output, got: %s", stderr.String())
+	}
+}
+
+// TestAnalyzeSVGRequiresOutput confirms the shared requireOutputForSVG
+// helper is wired into the analyze subcommand's svg path.
+func TestAnalyzeSVGRequiresOutput(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"regolith", "analyze", "--format", "svg", "hello"}, nil, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error when analyze --format svg has no -o, got nil")
+	}
+	if !strings.Contains(stderr.String(), "--output") {
+		t.Errorf("expected error to mention --output, got: %s", stderr.String())
+	}
+}
+
+// TestAnalyzeSVGStyleFlags exercises the new capability promoted by
+// moving svgStyleFlags to the shared struct: analyze's SVG output now
+// honors --literal-fill (and its siblings) the same way the render
+// command always did.
+func TestAnalyzeSVGStyleFlags(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "annotated.svg")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{
+		"regolith", "analyze",
+		"--format", "svg",
+		"-o", out,
+		"--literal-fill", "#ff0000",
+		"hello",
+	}, nil, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("failed to read analyzed SVG: %v", err)
+	}
+	if !strings.Contains(string(data), "#ff0000") {
+		t.Error("expected --literal-fill color in analyze SVG output")
 	}
 }
