@@ -15,6 +15,7 @@ import (
 	"github.com/0x4d5352/regolith/internal/flavor"
 	"github.com/0x4d5352/regolith/internal/output"
 	"github.com/0x4d5352/regolith/internal/renderer"
+	"github.com/0x4d5352/regolith/internal/renderer/theme"
 	"github.com/0x4d5352/regolith/internal/unescape"
 
 	// Import flavors to register them via init()
@@ -61,16 +62,18 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	formatName := fs.String("format", "svg", "Output format: svg, json, markdown")
 	unescapeFlag := fs.BoolP("unescape", "u", false, `Apply string literal unescaping before parsing (e.g., \\ becomes \)`)
 	colorMode := fs.String("color", "auto", "Color output: auto, always, never")
+	themeName := fs.String("theme", "", "Color theme (e.g. catppuccin-mocha, gruvbox-dark, default)")
 
 	// Dimension flags
 	padding := fs.Float64P("padding", "p", 10, "Padding around diagram")
 	fontSize := fs.Float64("font-size", 13, "Font size in pixels")
 	lineWidth := fs.Float64("line-width", 1.5, "Stroke width for connectors and loops")
 
-	// Color flags. Defaults track the built-in palette — leaving them
-	// unset uses the theme's value. The fill flags patch just the Fill
-	// of a single category's NodeStyle, preserving the category's
-	// stroke and text color from the default palette.
+	// Color flags. These layer on top of the default config (or the
+	// selected --theme). Defaults match the built-in palette, but the
+	// overrides are only applied when the user explicitly sets them —
+	// otherwise a --theme selection would be silently clobbered by the
+	// hard-coded defaults below. See applyColorFlags.
 	textColor := fs.String("text-color", "#000", "Fallback text color for elements outside any category")
 	lineColor := fs.String("line-color", "#64748b", "Connector / loop line color")
 	literalFill := fs.String("literal-fill", "#fee2e2", "Literal box fill color")
@@ -93,6 +96,12 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		for _, name := range flavor.List() {
 			f, _ := flavor.Get(name)
 			_, _ = fmt.Fprintf(stderr, "  %-12s %s\n", name, f.Description())
+		}
+		_, _ = fmt.Fprintf(stderr, "\nAvailable themes:\n")
+		_, _ = fmt.Fprintf(stderr, "  %-22s %s\n", "default", "Built-in palette (refreshed visual style)")
+		for _, name := range theme.List() {
+			t, _ := theme.Get(name)
+			_, _ = fmt.Fprintf(stderr, "  %-22s %s\n", name, t.Description())
 		}
 		_, _ = fmt.Fprintf(stderr, "\nExamples:\n")
 		_, _ = fmt.Fprintf(stderr, "  regolith 'a|b|c'\n")
@@ -155,22 +164,43 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	switch *formatName {
 	case "svg":
-		// Build config from flags. Fill overrides patch the Fill field
-		// on the category's NodeStyle entry, leaving stroke and text
-		// color alone — users expect --literal-fill to change the
-		// literal background, not its border or text treatment.
+		// Build config: defaults → theme → explicit CLI overrides.
+		// Order matters. A theme replaces the color fields wholesale;
+		// the --literal-fill / --line-color / etc. flags then layer on
+		// top so a user can tint one category without rebuilding the
+		// whole palette. Only flags the user actually set are applied;
+		// otherwise the hard-coded defaults would silently clobber the
+		// theme's choices.
 		cfg := renderer.DefaultConfig()
+		if err := applyTheme(cfg, *themeName); err != nil {
+			_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+			return err
+		}
 		cfg.Padding = *padding
 		cfg.FontSize = *fontSize
 		cfg.CharWidth = *fontSize * 0.6
 		cfg.Connector.StrokeWidth = *lineWidth
-		cfg.Connector.Color = *lineColor
-		cfg.TextColor = *textColor
-		patchNodeFill(cfg, "literal", *literalFill)
-		patchNodeFill(cfg, "charset", *charsetFill)
-		patchNodeFill(cfg, "escape", *escapeFill)
-		patchNodeFill(cfg, "anchor", *anchorFill)
-		cfg.SubexpFill = *subexpFill
+		if fs.Changed("line-color") {
+			cfg.Connector.Color = *lineColor
+		}
+		if fs.Changed("text-color") {
+			cfg.TextColor = *textColor
+		}
+		if fs.Changed("literal-fill") {
+			patchNodeFill(cfg, "literal", *literalFill)
+		}
+		if fs.Changed("charset-fill") {
+			patchNodeFill(cfg, "charset", *charsetFill)
+		}
+		if fs.Changed("escape-fill") {
+			patchNodeFill(cfg, "escape", *escapeFill)
+		}
+		if fs.Changed("anchor-fill") {
+			patchNodeFill(cfg, "anchor", *anchorFill)
+		}
+		if fs.Changed("subexp-fill") {
+			cfg.SubexpFill = *subexpFill
+		}
 
 		r := renderer.New(cfg)
 		svg := r.Render(parsedAST)
@@ -299,6 +329,7 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 	padding := fs.Float64P("padding", "p", 10, "Padding around diagram")
 	fontSize := fs.Float64("font-size", 13, "Font size in pixels")
 	lineWidth := fs.Float64("line-width", 1.5, "Stroke width for connectors and loops")
+	themeName := fs.String("theme", "", "Color theme for svg output (e.g. catppuccin-mocha, gruvbox-dark, default)")
 
 	fs.Usage = func() {
 		_, _ = fmt.Fprintf(stderr, "regolith analyze - Analyze regex performance\n\n")
@@ -379,6 +410,10 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 			return fmt.Errorf("--output required for svg")
 		}
 		cfg := renderer.DefaultConfig()
+		if err := applyTheme(cfg, *themeName); err != nil {
+			_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+			return err
+		}
 		cfg.Padding = *padding
 		cfg.FontSize = *fontSize
 		cfg.CharWidth = *fontSize * 0.6
@@ -421,6 +456,26 @@ func parseSeverity(s string) analyzer.Severity {
 	default:
 		return analyzer.SeverityInfo
 	}
+}
+
+// applyTheme resolves a theme name and applies it to cfg. An empty
+// string or the literal "default" are both treated as no-ops so the
+// user can type `--theme default` explicitly to opt out of any theme
+// selection that might come from a future config file, alias, or
+// environment variable. An unknown theme produces an error listing
+// every registered theme so the user can pick a valid one without
+// leaving the terminal.
+func applyTheme(cfg *renderer.Config, name string) error {
+	if name == "" || name == "default" {
+		return nil
+	}
+	t, ok := theme.Get(name)
+	if !ok {
+		return fmt.Errorf("unknown theme %q (available: default, %s)",
+			name, strings.Join(theme.List(), ", "))
+	}
+	t.Apply(cfg)
+	return nil
 }
 
 // patchNodeFill overrides just the Fill field on a single category's

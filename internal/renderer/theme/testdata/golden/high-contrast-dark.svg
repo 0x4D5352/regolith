@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="621.6" height="142" viewBox="0 0 621.6 142"><defs><marker id="start-arrow" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ffffff"/></marker><marker id="end-dot" markerWidth="8" markerHeight="8" refX="4" refY="4"><circle cx="4" cy="4" r="3" fill="#ffffff"/></marker></defs><style>
+		.literal rect { fill: #1a1a1a; stroke: #ff5252; stroke-width: 1.5; }
+		.literal text { fill: #ffffff; }
+		.escape rect { fill: #1a1a1a; stroke: #00e676; stroke-width: 1.5; }
+		.escape text { fill: #ffffff; }
+		.charset rect { fill: #1a1a1a; stroke: #ffff00; stroke-width: 1.5; }
+		.charset text { fill: #ffffff; }
+		.anchor rect { fill: #4a4a4a; stroke: #ffffff; stroke-width: 1.5; }
+		.anchor text { fill: #ffffff; }
+		.any-character rect { fill: #1a1a1a; stroke: #4da6ff; stroke-width: 1.5; }
+		.any-character text { fill: #ffffff; }
+		.flags rect { fill: #1a1a1a; stroke: #00e5ff; stroke-width: 1.5; }
+		.flags text { fill: #ffffff; }
+		.recursive-ref rect { fill: #1a1a1a; stroke: #ff40ff; stroke-width: 1.5; }
+		.recursive-ref text { fill: #ffffff; }
+		.callout rect { fill: #1a1a1a; stroke: #ffab40; stroke-width: 1.5; }
+		.callout text { fill: #ffffff; }
+		.backtrack-control rect { fill: #1a1a1a; stroke: #ff5252; stroke-width: 1.5; }
+		.backtrack-control text { fill: #ffffff; }
+		.conditional rect { fill: #1a1a1a; stroke: #00e5ff; stroke-width: 1.5; }
+		.conditional text { fill: #ffffff; }
+		.comment rect { fill: #1a1a1a; stroke: #808080; stroke-width: 1.5; stroke-dasharray: 4,2; }
+		.comment text { fill: #cccccc; }
+		.comment text { font-style: italic; }
+		text { font-family: monospace; font-size: 13px; fill: #ffffff; }
+		.subexp-label, .charset-label, .flags-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; }
+		.repeat-label { fill: #cccccc; font-family: system-ui, -apple-system, sans-serif; font-size: 11px; }
+	</style><line x1="5" y1="77.5" x2="25" y2="77.5" stroke="#ffffff" stroke-width="1.5" marker-start="url(#start-arrow)"/><line x1="600.6" y1="77.5" x2="613.6" y2="77.5" stroke="#ffffff" stroke-width="1.5" marker-end="url(#end-dot)"/><g transform="translate(25,10)"><g class="match"><path d="M 132 67.5 L 142 67.5 M 314 67.5 L 324 67.5 M 454.2 67.5 L 464.2 67.5" fill="none" stroke="#ffffff" stroke-width="1.5"/><g transform="translate(0,47)"><g class="anchor"><rect x="0" y="0" width="132" height="41" rx="14" ry="14"/><text x="66" y="24.1666666667" font-family="system-ui, -apple-system, sans-serif" font-size="11" text-anchor="middle">Start of line</text></g></g><g transform="translate(142,0)"><g class="subexp"><rect x="0" y="0" width="172" height="122" rx="8" ry="8" fill="none" stroke="#808080" stroke-width="1.5"/><text x="10" y="13" font-family="system-ui, -apple-system, sans-serif" font-size="11" class="subexp-label">non-capturing group</text><g transform="translate(31.5,23)"><g class="regexp"><path d="M 0 44.5 Q 10 44.5 10 34.5 V 21.5 Q 10 11.5 30 11.5" fill="none" stroke="#ffffff" stroke-width="1.5"/><path d="M 79 11.5 Q 99 11.5 99 21.5 V 34.5 Q 99 44.5 109 44.5" fill="none" stroke="#ffffff" stroke-width="1.5"/><path d="M 0 44.5 H 20" fill="none" stroke="#ffffff" stroke-width="1.5"/><path d="M 89 44.5 H 109" fill="none" stroke="#ffffff" stroke-width="1.5"/><g transform="translate(20,0)"><g transform="translate(10,0)"><g class="match"><g class="literal"><rect x="0" y="0" width="49" height="23" rx="8" ry="8"/><text x="24.5" y="15.8333333333" font-family="monospace" font-size="13" text-anchor="middle"><tspan class="quote">&#34;</tspan><tspan>abc</tspan><tspan class="quote">&#34;</tspan></text></g></g></g></g><g transform="translate(20,0)"><g transform="translate(0,33)"><g class="match"><g class="repeat"><path d="M 69 11.5 Q 69 33 59 33 H 10 Q 0 33 0 11.5" fill="none" stroke="#ffffff" stroke-width="1.5" class="loop-path"/><path d="M 39.5 28 L 34.5 33 L 39.5 38" fill="none" stroke="#ffffff" stroke-width="1.5"/><text x="34.5" y="46" font-family="system-ui, -apple-system, sans-serif" font-size="11" text-anchor="middle" class="repeat-label">2 to 4 times</text><g transform="translate(10,0)"><g class="escape"><rect x="0" y="0" width="49" height="23" rx="8" ry="8"/><text x="24.5" y="15.8333333333" font-family="monospace" font-size="13" text-anchor="middle">digit</text></g></g><line x1="0" y1="11.5" x2="10" y2="11.5" stroke="#ffffff" stroke-width="1.5"/><line x1="59" y1="11.5" x2="69" y2="11.5" stroke="#ffffff" stroke-width="1.5"/></g></g></g></g></g></g></g></g><g transform="translate(324,42)"><g class="repeat"><path d="M 130.2 25.5 Q 130.2 61 120.2 61 H 10 Q 0 61 0 25.5" fill="none" stroke="#ffffff" stroke-width="1.5" class="loop-path"/><path d="M 70.1 56 L 65.1 61 L 70.1 66" fill="none" stroke="#ffffff" stroke-width="1.5"/><g transform="translate(10,0)"><g class="charset"><rect x="0" y="0" width="110.2" height="51" rx="8" ry="8"/><text x="10" y="13" font-family="system-ui, -apple-system, sans-serif" font-size="11" class="charset-label">One of:</text><text x="55.1" y="36" font-family="monospace" font-size="13" text-anchor="middle">&#34;a&#34; - &#34;z&#34;</text></g></g><line x1="0" y1="25.5" x2="10" y2="25.5" stroke="#ffffff" stroke-width="1.5"/><line x1="120.2" y1="25.5" x2="130.2" y2="25.5" stroke="#ffffff" stroke-width="1.5"/></g></g><g transform="translate(464.2,56)"><g class="escape"><rect x="0" y="0" width="111.4" height="23" rx="8" ry="8"/><text x="55.7" y="15.8333333333" font-family="monospace" font-size="13" text-anchor="middle">word boundary</text></g></g></g></g></svg>
