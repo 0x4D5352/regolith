@@ -188,9 +188,21 @@ func wrapWithTransform(elem SVGElement, dx, dy float64) SVGElement {
 	}
 }
 
-// MeasureText estimates the width of text given the configuration
+// MeasureText estimates the width of content text (monospace) given
+// the configuration. Use this for anything that represents user-written
+// regex syntax — literals, charset items, escape sequences.
 func MeasureText(text string, cfg *Config) float64 {
 	return float64(len(text)) * cfg.CharWidth
+}
+
+// MeasureLabelText estimates the width of structural label text
+// (sans-serif) given the configuration. Use this for descriptive
+// labels that regolith generates — "one of", "1+ times", group names,
+// anchor descriptions, and so on. Sans-serif glyphs are narrower on
+// average than monospace, so a separate char-width estimate avoids
+// oversized label boxes.
+func MeasureLabelText(text string, cfg *Config) float64 {
+	return float64(len(text)) * cfg.LabelCharWidth
 }
 
 // PathBuilder helps construct SVG path data

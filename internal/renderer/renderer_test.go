@@ -448,8 +448,13 @@ func TestCustomConfig(t *testing.T) {
 		t.Fatalf("parse error: %v", err)
 	}
 
+	// Override a single category's fill via the NodeStyles map and
+	// bump the font size — asserting both customization paths still
+	// flow through to the rendered output.
 	cfg := DefaultConfig()
-	cfg.LiteralFill = "#ff0000"
+	literal := cfg.GetNodeStyle("literal")
+	literal.Fill = "#ff0000"
+	cfg.NodeStyles["literal"] = literal
 	cfg.FontSize = 20
 
 	r := New(cfg)

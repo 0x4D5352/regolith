@@ -34,12 +34,19 @@ func (r *Renderer) RenderAnnotated(root *parser.Regexp, report *analyzer.Analysi
 	defer func() { r.nodeFindings = nil }()
 
 	padding := r.Config.Padding
+	leftMargin := contentLeftMargin(padding)
+	rightMargin := contentRightMargin(padding)
 
 	// Render the legend below the diagram.
 	legend := r.renderLegend(report.Findings)
 
+	// diagramWidth is the width the diagram itself needs (with marker
+	// margins); totalWidth also accounts for the legend, which may be
+	// wider than the diagram. These two widths are tracked separately
+	// so the end connector / dot marker can terminate at the diagram's
+	// right edge instead of stretching across the legend area.
 	legendGap := padding
-	diagramWidth := rendered.BBox.Width + 2*padding
+	diagramWidth := rendered.BBox.Width + leftMargin + rightMargin
 	legendWidth := legend.BBox.Width + 2*padding
 	totalWidth := diagramWidth
 	if legendWidth > totalWidth {
@@ -57,7 +64,10 @@ func (r *Renderer) RenderAnnotated(root *parser.Regexp, report *analyzer.Analysi
 		flagsRendered = r.renderFlags(root.Flags)
 		flagsElement = flagsRendered.Element
 		flagsWidth = flagsRendered.BBox.Width + padding
-		totalWidth += flagsWidth
+		diagramWidth += flagsWidth
+		if diagramWidth > totalWidth {
+			totalWidth = diagramWidth
+		}
 		if flagsRendered.BBox.Height+2*padding > diagramHeight {
 			diagramHeight = flagsRendered.BBox.Height + 2*padding
 			totalHeight = diagramHeight + legendGap + legend.BBox.Height + padding
@@ -79,26 +89,31 @@ func (r *Renderer) RenderAnnotated(root *parser.Regexp, report *analyzer.Analysi
 		totalHeight += bannerHeight
 	}
 
-	// Start/end connector lines.
+	// Start/end connector lines. The end line is computed from
+	// diagramWidth (not totalWidth) so the end dot stays at the visual
+	// end of the diagram even when the legend below is wider.
 	anchorY := bannerHeight + padding + rendered.BBox.AnchorY
 	startX := padding / 2
-	endX := totalWidth - padding/2
+	contentEndX := diagramWidth - rightMargin - flagsWidth
+	endLineLength := float64(visibleConnectorWidth + endDotRadius)
 
 	startLine := &Line{
 		X1: startX, Y1: anchorY,
-		X2: padding, Y2: anchorY,
-		Stroke:      r.Config.LineColor,
-		StrokeWidth: r.Config.LineWidth,
+		X2: leftMargin, Y2: anchorY,
+		Stroke:      r.Config.Connector.Color,
+		StrokeWidth: r.Config.Connector.StrokeWidth,
+		MarkerStart: startMarkerRef(r.Config.Connector.StartMarker),
 	}
 	endLine := &Line{
-		X1: diagramWidth - padding - flagsWidth, Y1: anchorY,
-		X2: endX - flagsWidth, Y2: anchorY,
-		Stroke:      r.Config.LineColor,
-		StrokeWidth: r.Config.LineWidth,
+		X1: contentEndX, Y1: anchorY,
+		X2: contentEndX + endLineLength, Y2: anchorY,
+		Stroke:      r.Config.Connector.Color,
+		StrokeWidth: r.Config.Connector.StrokeWidth,
+		MarkerEnd:   endMarkerRef(r.Config.Connector.EndMarker),
 	}
 
 	contentGroup := &Group{
-		Transform: "translate(" + fmtFloat(padding) + "," + fmtFloat(bannerHeight+padding) + ")",
+		Transform: "translate(" + fmtFloat(leftMargin) + "," + fmtFloat(bannerHeight+padding) + ")",
 		Children:  []SVGElement{rendered.Element},
 	}
 
@@ -116,8 +131,11 @@ func (r *Renderer) RenderAnnotated(root *parser.Regexp, report *analyzer.Analysi
 	}
 
 	if flagsElement != nil {
+		// Flags box sits against the right edge of the diagram
+		// (not the total width) so it stays aligned with the
+		// railroad diagram when the legend is wider.
 		children = append(children, &Group{
-			Transform: "translate(" + fmtFloat(totalWidth-padding-flagsWidth+padding/2) + "," + fmtFloat(bannerHeight+padding) + ")",
+			Transform: "translate(" + fmtFloat(diagramWidth-padding-flagsWidth+padding/2) + "," + fmtFloat(bannerHeight+padding) + ")",
 			Children:  []SVGElement{flagsElement},
 		})
 	}
@@ -134,6 +152,7 @@ func (r *Renderer) RenderAnnotated(root *parser.Regexp, report *analyzer.Analysi
 		Width:    totalWidth,
 		Height:   totalHeight,
 		ViewBox:  "0 0 " + fmtFloat(totalWidth) + " " + fmtFloat(totalHeight),
+		Defs:     r.getDefs(),
 		Style:    r.getStyles() + r.getAnnotationStyles(),
 		Children: children,
 	}
@@ -295,6 +314,11 @@ func severityBadgeChar(sev analyzer.Severity) string {
 // renderLegend produces the SVG elements for the findings legend that is
 // placed below the railroad diagram. Each finding gets a row with a colored
 // severity indicator and the finding title and description.
+//
+// The legend is descriptive prose, not regex content, so every text
+// element uses the sans-serif label font. The header stays at
+// Config.FontSize (13) to give it slight prominence over the 11px
+// finding body text.
 func (r *Renderer) renderLegend(findings []*analyzer.Finding) RenderedNode {
 	cfg := r.Config
 	lineHeight := cfg.FontSize + 6
@@ -309,14 +333,14 @@ func (r *Renderer) renderLegend(findings []*analyzer.Finding) RenderedNode {
 		X:          0,
 		Y:          y,
 		Content:    "Analysis Findings",
-		FontFamily: cfg.FontFamily,
+		FontFamily: cfg.LabelFontFamily,
 		FontSize:   cfg.FontSize,
 		Fill:       cfg.TextColor,
 		Class:      "analysis-legend-title",
 	})
 	y += lineHeight
 
-	maxWidth := MeasureText("Analysis Findings", cfg)
+	maxWidth := MeasureLabelText("Analysis Findings", cfg)
 
 	for _, f := range findings {
 		// Colored circle indicator.
@@ -333,11 +357,11 @@ func (r *Renderer) renderLegend(findings []*analyzer.Finding) RenderedNode {
 			X:          leftMargin,
 			Y:          y,
 			Content:    label,
-			FontFamily: cfg.FontFamily,
+			FontFamily: cfg.LabelFontFamily,
 			FontSize:   cfg.FontSize - 1,
 			Fill:       cfg.TextColor,
 		})
-		labelW := leftMargin + MeasureText(label, cfg)
+		labelW := leftMargin + MeasureLabelText(label, cfg)
 		if labelW > maxWidth {
 			maxWidth = labelW
 		}
@@ -349,11 +373,11 @@ func (r *Renderer) renderLegend(findings []*analyzer.Finding) RenderedNode {
 				X:          leftMargin,
 				Y:          y,
 				Content:    f.Description,
-				FontFamily: cfg.FontFamily,
-				FontSize:   cfg.FontSize - 2,
+				FontFamily: cfg.LabelFontFamily,
+				FontSize:   cfg.LabelFontSize,
 				Fill:       "#666",
 			})
-			descW := leftMargin + MeasureText(f.Description, cfg)
+			descW := leftMargin + MeasureLabelText(f.Description, cfg)
 			if descW > maxWidth {
 				maxWidth = descW
 			}
@@ -366,12 +390,12 @@ func (r *Renderer) renderLegend(findings []*analyzer.Finding) RenderedNode {
 				X:          leftMargin,
 				Y:          y,
 				Content:    f.Suggestion,
-				FontFamily: cfg.FontFamily,
-				FontSize:   cfg.FontSize - 2,
+				FontFamily: cfg.LabelFontFamily,
+				FontSize:   cfg.LabelFontSize,
 				Fill:       "#888",
 				Class:      "analysis-suggestion",
 			})
-			suggW := leftMargin + MeasureText(f.Suggestion, cfg)
+			suggW := leftMargin + MeasureLabelText(f.Suggestion, cfg)
 			if suggW > maxWidth {
 				maxWidth = suggW
 			}

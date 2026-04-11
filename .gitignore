@@ -44,6 +44,9 @@ regex.svg
 # Worktrees
 .worktrees/
 
+# Visual brainstorming sessions
+.superpowers/
+
 # Additional AI Steering Docs
 PLAN.md
 TODO.md

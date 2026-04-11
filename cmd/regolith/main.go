@@ -64,16 +64,19 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	// Dimension flags
 	padding := fs.Float64P("padding", "p", 10, "Padding around diagram")
-	fontSize := fs.Float64("font-size", 14, "Font size in pixels")
-	lineWidth := fs.Float64("line-width", 2, "Stroke width for lines")
+	fontSize := fs.Float64("font-size", 13, "Font size in pixels")
+	lineWidth := fs.Float64("line-width", 1.5, "Stroke width for connectors and loops")
 
-	// Color flags
-	textColor := fs.String("text-color", "#000", "Text color")
-	lineColor := fs.String("line-color", "#000", "Line/stroke color")
-	literalFill := fs.String("literal-fill", "#ff6b6b", "Literal box fill color")
-	charsetFill := fs.String("charset-fill", "#cbcbba", "Character set box fill color")
-	escapeFill := fs.String("escape-fill", "#bada55", "Escape sequence box fill color")
-	anchorFill := fs.String("anchor-fill", "#6b6659", "Anchor box fill color")
+	// Color flags. Defaults track the built-in palette — leaving them
+	// unset uses the theme's value. The fill flags patch just the Fill
+	// of a single category's NodeStyle, preserving the category's
+	// stroke and text color from the default palette.
+	textColor := fs.String("text-color", "#000", "Fallback text color for elements outside any category")
+	lineColor := fs.String("line-color", "#64748b", "Connector / loop line color")
+	literalFill := fs.String("literal-fill", "#fee2e2", "Literal box fill color")
+	charsetFill := fs.String("charset-fill", "#f5f0e1", "Character set box fill color")
+	escapeFill := fs.String("escape-fill", "#ecfccb", "Escape sequence box fill color")
+	anchorFill := fs.String("anchor-fill", "#334155", "Anchor box fill color")
 	subexpFill := fs.String("subexp-fill", "none", "Outermost subexpression box fill color (nested groups use cycling colors)")
 
 	// Custom usage message
@@ -152,18 +155,21 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	switch *formatName {
 	case "svg":
-		// Build config from flags
+		// Build config from flags. Fill overrides patch the Fill field
+		// on the category's NodeStyle entry, leaving stroke and text
+		// color alone — users expect --literal-fill to change the
+		// literal background, not its border or text treatment.
 		cfg := renderer.DefaultConfig()
 		cfg.Padding = *padding
 		cfg.FontSize = *fontSize
-		cfg.CharWidth = *fontSize * 0.6 // Approximate monospace character width
-		cfg.LineWidth = *lineWidth
+		cfg.CharWidth = *fontSize * 0.6
+		cfg.Connector.StrokeWidth = *lineWidth
+		cfg.Connector.Color = *lineColor
 		cfg.TextColor = *textColor
-		cfg.LineColor = *lineColor
-		cfg.LiteralFill = *literalFill
-		cfg.CharsetFill = *charsetFill
-		cfg.EscapeFill = *escapeFill
-		cfg.AnchorFill = *anchorFill
+		patchNodeFill(cfg, "literal", *literalFill)
+		patchNodeFill(cfg, "charset", *charsetFill)
+		patchNodeFill(cfg, "escape", *escapeFill)
+		patchNodeFill(cfg, "anchor", *anchorFill)
 		cfg.SubexpFill = *subexpFill
 
 		r := renderer.New(cfg)
@@ -291,8 +297,8 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 	colorMode := fs.String("color", "auto", "Color output: auto, always, never")
 
 	padding := fs.Float64P("padding", "p", 10, "Padding around diagram")
-	fontSize := fs.Float64("font-size", 14, "Font size in pixels")
-	lineWidth := fs.Float64("line-width", 2, "Stroke width for lines")
+	fontSize := fs.Float64("font-size", 13, "Font size in pixels")
+	lineWidth := fs.Float64("line-width", 1.5, "Stroke width for connectors and loops")
 
 	fs.Usage = func() {
 		_, _ = fmt.Fprintf(stderr, "regolith analyze - Analyze regex performance\n\n")
@@ -376,7 +382,7 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 		cfg.Padding = *padding
 		cfg.FontSize = *fontSize
 		cfg.CharWidth = *fontSize * 0.6
-		cfg.LineWidth = *lineWidth
+		cfg.Connector.StrokeWidth = *lineWidth
 		r := renderer.New(cfg)
 		svg := r.RenderAnnotated(parsedAST, report)
 		if err := os.WriteFile(*outputFile, []byte(svg), 0644); err != nil {
@@ -415,6 +421,17 @@ func parseSeverity(s string) analyzer.Severity {
 	default:
 		return analyzer.SeverityInfo
 	}
+}
+
+// patchNodeFill overrides just the Fill field on a single category's
+// NodeStyle, leaving the stroke and text color from the underlying
+// theme in place. Used by the --literal-fill / --charset-fill /
+// --escape-fill / --anchor-fill flags so users can tint a single
+// category without having to provide a whole color bundle.
+func patchNodeFill(cfg *renderer.Config, class, fill string) {
+	style := cfg.GetNodeStyle(class)
+	style.Fill = fill
+	cfg.NodeStyles[class] = style
 }
 
 // filterBySeverity returns only findings at or above the minimum severity.

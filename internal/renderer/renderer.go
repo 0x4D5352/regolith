@@ -25,12 +25,57 @@ func New(cfg *Config) *Renderer {
 }
 
 // Render renders a regex AST to SVG
+// Marker layout constants. These need to stay consistent with the
+// marker definitions in getDefs() — startArrowReach is the polygon
+// width and endDotRadius is the circle r attribute.
+const (
+	// startArrowReach is how far the start arrow extends rightward
+	// from its line start point.
+	startArrowReach = 10
+	// endDotRadius is the radius of the end dot circle.
+	endDotRadius = 3
+	// visibleConnectorWidth is the visible line segment between a
+	// connector marker and its adjacent content node. The same value
+	// is used on both sides of the diagram so the spacing reads
+	// symmetric, and it equals the horizontal gap between match items
+	// so that in annotated mode the gap from the start arrow to an
+	// annotation border matches the gap from the next item to that
+	// border.
+	visibleConnectorWidth = 10
+)
+
+// contentLeftMargin and contentRightMargin compute the per-side
+// horizontal margin from the SVG viewBox edge to the first/last
+// content node. They differ because the start arrow is anchored to its
+// line start (extends rightward by startArrowReach) while the end dot
+// is centered on its line end (extends both directions by endDotRadius).
+//
+//	[edgeClearance | start arrow | visible connector | content ... | visible connector | dot | edgeClearance]
+//
+// edgeClearance comes from cfg.Padding/2 so users who tune Padding
+// also tune the breathing room at the diagram's edges.
+func contentLeftMargin(padding float64) float64 {
+	edgeClearance := padding / 2
+	return edgeClearance + startArrowReach + visibleConnectorWidth
+}
+
+func contentRightMargin(padding float64) float64 {
+	edgeClearance := padding / 2
+	// visible connector + dot diameter (2*radius) + edge clearance
+	return visibleConnectorWidth + 2*endDotRadius + edgeClearance
+}
+
 func (r *Renderer) Render(ast *parser.Regexp) string {
 	rendered := r.renderRegexp(ast)
 
-	// Add padding around the diagram
+	// Add padding around the diagram. The content area is offset on
+	// each side by contentLeftMargin / contentRightMargin, which
+	// reserve space for the start/end markers and a visible connector
+	// segment between the marker and the first/last content node.
 	padding := r.Config.Padding
-	width := rendered.BBox.Width + 2*padding
+	leftMargin := contentLeftMargin(padding)
+	rightMargin := contentRightMargin(padding)
+	width := rendered.BBox.Width + leftMargin + rightMargin
 	height := rendered.BBox.Height + 2*padding
 
 	// Check for flags and render them
@@ -65,32 +110,39 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 		height += bannerHeight
 	}
 
-	// Create start and end connectors
+	// Create start and end connectors. The start line spans from the
+	// left edge clearance out to leftMargin (where content begins),
+	// hosting the arrow marker plus a visible connector segment. The
+	// end line mirrors this on the right with the dot marker.
 	startX := padding / 2
-	endX := width - padding/2
 	anchorY := bannerHeight + padding + rendered.BBox.AnchorY
+	contentEndX := width - rightMargin - flagsWidth
+	endLineLength := float64(visibleConnectorWidth + endDotRadius)
 
 	startLine := &Line{
 		X1:          startX,
 		Y1:          anchorY,
-		X2:          padding,
+		X2:          leftMargin,
 		Y2:          anchorY,
-		Stroke:      r.Config.LineColor,
-		StrokeWidth: r.Config.LineWidth,
+		Stroke:      r.Config.Connector.Color,
+		StrokeWidth: r.Config.Connector.StrokeWidth,
+		MarkerStart: startMarkerRef(r.Config.Connector.StartMarker),
 	}
 
 	endLine := &Line{
-		X1:          width - padding - flagsWidth,
+		X1:          contentEndX,
 		Y1:          anchorY,
-		X2:          endX - flagsWidth,
+		X2:          contentEndX + endLineLength,
 		Y2:          anchorY,
-		Stroke:      r.Config.LineColor,
-		StrokeWidth: r.Config.LineWidth,
+		Stroke:      r.Config.Connector.Color,
+		StrokeWidth: r.Config.Connector.StrokeWidth,
+		MarkerEnd:   endMarkerRef(r.Config.Connector.EndMarker),
 	}
 
-	// Wrap the rendered content in a group with padding offset
+	// Wrap the rendered content in a group offset by leftMargin so
+	// the first node sits at the end of the start connector line.
 	contentGroup := &Group{
-		Transform: "translate(" + fmtFloat(padding) + "," + fmtFloat(bannerHeight+padding) + ")",
+		Transform: "translate(" + fmtFloat(leftMargin) + "," + fmtFloat(bannerHeight+padding) + ")",
 		Children:  []SVGElement{rendered.Element},
 	}
 
@@ -122,6 +174,7 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 		Width:    width,
 		Height:   height,
 		ViewBox:  "0 0 " + fmtFloat(width) + " " + fmtFloat(height),
+		Defs:     r.getDefs(),
 		Style:    r.getStyles(),
 		Children: children,
 	}
@@ -129,7 +182,57 @@ func (r *Renderer) Render(ast *parser.Regexp) string {
 	return svg.Render()
 }
 
-// renderPatternOptions renders PCRE pattern start options as a banner
+// startMarkerRef returns the SVG marker reference string for a
+// Connector.StartMarker setting, or an empty string if no marker is
+// configured. Keeping this as a small helper means the render sites
+// don't have to know which marker ids exist.
+func startMarkerRef(kind string) string {
+	switch kind {
+	case "arrow":
+		return "url(#start-arrow)"
+	default:
+		return ""
+	}
+}
+
+// endMarkerRef returns the SVG marker reference string for a
+// Connector.EndMarker setting, or an empty string if no marker is
+// configured.
+func endMarkerRef(kind string) string {
+	switch kind {
+	case "dot":
+		return "url(#end-dot)"
+	default:
+		return ""
+	}
+}
+
+// getDefs returns an SVG <defs> payload containing marker definitions
+// for the configured connector terminators. The markers are colored
+// with the connector color so they read as a single unit with the
+// track lines they decorate.
+func (r *Renderer) getDefs() string {
+	color := r.Config.Connector.Color
+	var b strings.Builder
+	if r.Config.Connector.StartMarker == "arrow" {
+		// The arrow points right (into the diagram). refX=0 places the
+		// tip at the line's start; refY=3.5 centers it vertically.
+		fmt.Fprintf(&b,
+			`<marker id="start-arrow" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="%s"/></marker>`,
+			color)
+	}
+	if r.Config.Connector.EndMarker == "dot" {
+		// refX=4 centers the dot on the line's end point.
+		fmt.Fprintf(&b,
+			`<marker id="end-dot" markerWidth="8" markerHeight="8" refX="4" refY="4"><circle cx="4" cy="4" r="3" fill="%s"/></marker>`,
+			color)
+	}
+	return b.String()
+}
+
+// renderPatternOptions renders PCRE pattern start options as a banner.
+// The banner text is a structural description regolith generates, so
+// it uses the sans-serif label font family.
 func (r *Renderer) renderPatternOptions(options []*parser.PatternOption) RenderedNode {
 	cfg := r.Config
 	padding := cfg.Padding / 2
@@ -145,7 +248,7 @@ func (r *Renderer) renderPatternOptions(options []*parser.PatternOption) Rendere
 	}
 	label := "Options: " + strings.Join(parts, ", ")
 
-	textWidth := MeasureText(label, cfg)
+	textWidth := MeasureLabelText(label, cfg)
 	width := textWidth + 2*padding
 	height := cfg.FontSize + 2*padding
 
@@ -158,15 +261,15 @@ func (r *Renderer) renderPatternOptions(options []*parser.PatternOption) Rendere
 		Ry:          cfg.CornerRadius,
 		Fill:        "#e8e8e8",
 		Stroke:      "#999",
-		StrokeWidth: cfg.LineWidth,
+		StrokeWidth: cfg.NodeStrokeWidth,
 	}
 
 	textElem := &Text{
 		X:          width / 2,
-		Y:          height/2 + cfg.FontSize/3,
+		Y:          height/2 + cfg.LabelFontSize/3,
 		Content:    label,
-		FontFamily: cfg.FontFamily,
-		FontSize:   cfg.FontSize - 2,
+		FontFamily: cfg.LabelFontFamily,
+		FontSize:   cfg.LabelFontSize,
 		Anchor:     "middle",
 		Class:      "pattern-options-label",
 	}
@@ -182,41 +285,74 @@ func (r *Renderer) renderPatternOptions(options []*parser.PatternOption) Rendere
 	}
 }
 
-// getStyles returns the CSS styles for the SVG
+// getStyles returns the CSS styles for the SVG.
+//
+// The stylesheet is generated from r.Config.NodeStyles so that a theme
+// only needs to replace the map, not the render logic. Each category
+// contributes three rules: rect fill, rect stroke (+ stroke-width), and
+// text fill. Per-class text colors eliminate the old global "all text
+// is black" rule, which lets dark-background nodes (anchors) pick their
+// own readable foreground without a special case.
+//
+// Corner radii are NOT set here. Some SVG renderers (notably librsvg)
+// don't honor CSS-set rx/ry; the render methods set them inline on
+// each <rect> instead.
 func (r *Renderer) getStyles() string {
-	return fmt.Sprintf(`
-		.literal rect { fill: %s; }
-		.escape rect { fill: %s; }
-		.charset rect { fill: %s; }
-		.anchor rect { fill: %s; }
-		.any-character rect { fill: %s; }
-		.flags rect { fill: %s; }
-		.recursive-ref rect { fill: %s; }
-		.callout rect { fill: %s; }
-		.backtrack-control rect { fill: %s; }
-		.conditional rect { fill: %s; }
-		.comment rect { fill: #e8e8e8; stroke: #999; stroke-dasharray: 4,2; }
-		.comment text { fill: #666; font-style: italic; }
-		text { font-family: %s; font-size: `+fmtFloat(r.Config.FontSize)+`px; fill: %s; }
-		.anchor text { fill: #fff; }
-		.quote { fill: #000; }
-		.subexp-label, .charset-label, .flags-label { font-size: `+fmtFloat(r.Config.FontSize-2)+`px; font-style: italic; }
-		.repeat-label { fill: %s; font-size: `+fmtFloat(r.Config.FontSize-2)+`px; }
-	`,
-		r.Config.LiteralFill,
-		r.Config.EscapeFill,
-		r.Config.CharsetFill,
-		r.Config.AnchorFill,
-		r.Config.AnyCharFill,
-		r.Config.FlagsFill,
-		r.Config.RecursiveRefFill,
-		r.Config.CalloutFill,
-		r.Config.BacktrackControlFill,
-		r.Config.ConditionalFill,
-		r.Config.FontFamily,
-		r.Config.TextColor,
-		r.Config.RepeatLabelColor,
-	)
+	cfg := r.Config
+	var b strings.Builder
+
+	// Category rules — iterate in a stable, readable order rather
+	// than whatever order range-over-map yields.
+	categories := []string{
+		"literal", "escape", "charset", "anchor", "any-character",
+		"flags", "recursive-ref", "callout", "backtrack-control",
+		"conditional", "comment",
+	}
+	strokeWidth := fmtFloat(cfg.NodeStrokeWidth)
+	for _, class := range categories {
+		style, ok := cfg.NodeStyles[class]
+		if !ok {
+			continue
+		}
+		// The comment class gets an extra stroke-dasharray so the box
+		// reads as a comment bubble rather than a normal node.
+		dashAttr := ""
+		if class == "comment" {
+			dashAttr = " stroke-dasharray: 4,2;"
+		}
+		fmt.Fprintf(&b,
+			"\n\t\t.%s rect { fill: %s; stroke: %s; stroke-width: %s;%s }",
+			class, style.Fill, style.Stroke, strokeWidth, dashAttr)
+		fmt.Fprintf(&b,
+			"\n\t\t.%s text { fill: %s; }",
+			class, style.TextColor)
+	}
+
+	// Comment text keeps its italic treatment — it's prose inside a
+	// code-shaped diagram, and the italic cue makes that obvious.
+	b.WriteString("\n\t\t.comment text { font-style: italic; }")
+
+	// Base text rule. FontFamily and FontSize are defaults for any
+	// Text element that doesn't override them inline. Text fill is
+	// deliberately NOT set globally — each category rule above sets
+	// it per class, and TextColor on cfg is only a fallback for
+	// elements outside any category.
+	fmt.Fprintf(&b,
+		"\n\t\ttext { font-family: %s; font-size: %spx; fill: %s; }",
+		cfg.FontFamily, fmtFloat(cfg.FontSize), cfg.TextColor)
+
+	// Structural labels (group names, charset header, flags header,
+	// repeat labels) switch to the sans-serif label font. No italic
+	// this time — the hierarchy is already carried by the font change.
+	fmt.Fprintf(&b,
+		"\n\t\t.subexp-label, .charset-label, .flags-label { font-family: %s; font-size: %spx; }",
+		cfg.LabelFontFamily, fmtFloat(cfg.LabelFontSize))
+	fmt.Fprintf(&b,
+		"\n\t\t.repeat-label { fill: %s; font-family: %s; font-size: %spx; }",
+		cfg.RepeatLabelColor, cfg.LabelFontFamily, fmtFloat(cfg.LabelFontSize))
+
+	b.WriteString("\n\t")
+	return b.String()
 }
 
 // renderNode dispatches to the appropriate render method based on node type.
@@ -272,16 +408,89 @@ func (r *Renderer) renderNode(node parser.Node) RenderedNode {
 	case *parser.CharsetStringDisjunction:
 		rendered = r.renderCharsetStringDisjunction(n)
 	default:
-		rendered = r.renderLabel(fmt.Sprintf("<%s>", node.Type()), "unknown")
+		rendered = r.renderStructuralLabel(fmt.Sprintf("<%s>", node.Type()), "unknown")
 	}
 	return r.annotateNode(node, rendered)
 }
 
-// renderLabel creates a labeled box (used by many node types)
+// cornerRadiusFor returns the effective corner radius for a node class.
+// Most categories inherit the global Config.CornerRadius; anchors
+// override to a larger radius so they render as full pills.
+func (r *Renderer) cornerRadiusFor(class string) float64 {
+	if override := r.Config.GetNodeStyle(class).CornerRadius; override > 0 {
+		return override
+	}
+	return r.Config.CornerRadius
+}
+
+// renderLabel creates a labeled box whose text is **regex content** —
+// escape sequences, back-references, anything that represents user-
+// written regex syntax. Rendered in the monospace content font so it
+// reads as code.
 func (r *Renderer) renderLabel(text, class string) RenderedNode {
 	cfg := r.Config
 	textWidth := MeasureText(text, cfg)
 	padding := cfg.Padding / 2
+
+	width := textWidth + 2*padding
+	height := cfg.FontSize + 2*padding
+	radius := r.cornerRadiusFor(class)
+
+	rect := &Rect{
+		X:      0,
+		Y:      0,
+		Width:  width,
+		Height: height,
+		Rx:     radius,
+		Ry:     radius,
+	}
+
+	textElem := &Text{
+		X:          width / 2,
+		Y:          height/2 + cfg.FontSize/3, // Approximate vertical centering
+		Content:    text,
+		FontFamily: cfg.FontFamily,
+		FontSize:   cfg.FontSize,
+		Anchor:     "middle",
+	}
+
+	group := &Group{
+		Class:    class,
+		Children: []SVGElement{rect, textElem},
+	}
+
+	return RenderedNode{
+		Element: group,
+		BBox:    NewBoundingBox(0, 0, width, height),
+	}
+}
+
+// renderStructuralLabel creates a labeled box whose text is a
+// **description regolith generates** — anchor names, "any character",
+// back-reference descriptions, condition words, group labels. Rendered
+// in the sans-serif label font to distinguish it from the user's
+// regex content at a glance.
+//
+// Box height stays aligned with content-font boxes so that a row of
+// mixed label types reads as a uniform band. Only the font family and
+// font size change.
+//
+// For nodes with an enlarged corner radius (pills like anchors), the
+// horizontal padding is widened to the corner radius. Otherwise the
+// text would extend into the rounded ends of the pill and appear to
+// overflow the fill.
+func (r *Renderer) renderStructuralLabel(text, class string) RenderedNode {
+	cfg := r.Config
+	textWidth := MeasureLabelText(text, cfg)
+	radius := r.cornerRadiusFor(class)
+
+	// For standard rectangular nodes, keep the existing tight padding.
+	// For pills (anchors), widen to the corner radius so text stays
+	// clear of the rounded ends.
+	padding := cfg.Padding / 2
+	if nodeRadius := cfg.GetNodeStyle(class).CornerRadius; nodeRadius > 0 && nodeRadius > padding {
+		padding = nodeRadius
+	}
 
 	width := textWidth + 2*padding
 	height := cfg.FontSize + 2*padding
@@ -291,16 +500,16 @@ func (r *Renderer) renderLabel(text, class string) RenderedNode {
 		Y:      0,
 		Width:  width,
 		Height: height,
-		Rx:     cfg.CornerRadius,
-		Ry:     cfg.CornerRadius,
+		Rx:     radius,
+		Ry:     radius,
 	}
 
 	textElem := &Text{
 		X:          width / 2,
-		Y:          height/2 + cfg.FontSize/3, // Approximate vertical centering
+		Y:          height/2 + cfg.LabelFontSize/3,
 		Content:    text,
-		FontFamily: cfg.FontFamily,
-		FontSize:   cfg.FontSize,
+		FontFamily: cfg.LabelFontFamily,
+		FontSize:   cfg.LabelFontSize,
 		Anchor:     "middle",
 	}
 
@@ -345,11 +554,14 @@ func (r *Renderer) renderFlags(flags string) RenderedNode {
 
 	label := "Flags:"
 
-	// Calculate dimensions
-	labelWidth := MeasureText(label, cfg)
+	// Calculate dimensions. Both the header and the flag item names
+	// ("global", "ignore case", ...) are English descriptions regolith
+	// generates, so both are measured against the sans-serif label
+	// char-width.
+	labelWidth := MeasureLabelText(label, cfg)
 	maxItemWidth := 0.0
 	for _, item := range flagItems {
-		w := MeasureText(item, cfg)
+		w := MeasureLabelText(item, cfg)
 		if w > maxItemWidth {
 			maxItemWidth = w
 		}
@@ -379,13 +591,13 @@ func (r *Renderer) renderFlags(flags string) RenderedNode {
 		Ry:     cfg.CornerRadius,
 	})
 
-	// Label
+	// Header label
 	children = append(children, &Text{
 		X:          padding,
 		Y:          cfg.FontSize,
 		Content:    label,
-		FontFamily: cfg.FontFamily,
-		FontSize:   cfg.FontSize - 2,
+		FontFamily: cfg.LabelFontFamily,
+		FontSize:   cfg.LabelFontSize,
 		Class:      "flags-label",
 	})
 
@@ -396,8 +608,8 @@ func (r *Renderer) renderFlags(flags string) RenderedNode {
 			X:          width / 2,
 			Y:          y,
 			Content:    item,
-			FontFamily: cfg.FontFamily,
-			FontSize:   cfg.FontSize,
+			FontFamily: cfg.LabelFontFamily,
+			FontSize:   cfg.LabelFontSize,
 			Anchor:     "middle",
 		})
 		y += itemHeight
@@ -423,14 +635,15 @@ func (r *Renderer) renderQuotedLabel(text, class string) RenderedNode {
 
 	width := textWidth + 2*padding
 	height := cfg.FontSize + 2*padding
+	radius := r.cornerRadiusFor(class)
 
 	rect := &Rect{
 		X:      0,
 		Y:      0,
 		Width:  width,
 		Height: height,
-		Rx:     cfg.CornerRadius,
-		Ry:     cfg.CornerRadius,
+		Rx:     radius,
+		Ry:     radius,
 	}
 
 	// Create text with styled quotes
@@ -497,15 +710,17 @@ func (r *Renderer) renderAnchor(anchor *parser.Anchor) RenderedNode {
 	default:
 		label = anchor.AnchorType
 	}
-	return r.renderLabel(label, "anchor")
+	return r.renderStructuralLabel(label, "anchor")
 }
 
 // renderAnyCharacter renders the . metacharacter
 func (r *Renderer) renderAnyCharacter(_ *parser.AnyCharacter) RenderedNode {
-	return r.renderLabel("any character", "any-character")
+	return r.renderStructuralLabel("any character", "any-character")
 }
 
-// renderBackReference renders a back-reference like \1 or \k<name>
+// renderBackReference renders a back-reference like \1 or \k<name>.
+// The label is a description ("back reference #1"), not raw regex
+// syntax, so it renders in the sans-serif structural font.
 func (r *Renderer) renderBackReference(br *parser.BackReference) RenderedNode {
 	var label string
 	if br.Name != "" {
@@ -513,10 +728,12 @@ func (r *Renderer) renderBackReference(br *parser.BackReference) RenderedNode {
 	} else {
 		label = fmt.Sprintf("back reference #%d", br.Number)
 	}
-	return r.renderLabel(label, "escape")
+	return r.renderStructuralLabel(label, "escape")
 }
 
-// renderUnicodePropertyEscape renders a Unicode property escape like \p{Letter} or \P{Number}
+// renderUnicodePropertyEscape renders a Unicode property escape like
+// \p{Letter} or \P{Number}. Like back-references, the label is a
+// description ("Unicode Letter") and uses the structural font.
 func (r *Renderer) renderUnicodePropertyEscape(upe *parser.UnicodePropertyEscape) RenderedNode {
 	var label string
 	if upe.Negated {
@@ -524,7 +741,7 @@ func (r *Renderer) renderUnicodePropertyEscape(upe *parser.UnicodePropertyEscape
 	} else {
 		label = fmt.Sprintf("Unicode %s", upe.Property)
 	}
-	return r.renderLabel(label, "escape")
+	return r.renderStructuralLabel(label, "escape")
 }
 
 // renderQuotedLiteral renders a \Q...\E quoted literal sequence
@@ -532,11 +749,14 @@ func (r *Renderer) renderQuotedLiteral(ql *parser.QuotedLiteral) RenderedNode {
 	return r.renderQuotedLabel(ql.Text, "literal")
 }
 
-// renderComment renders a (?#...) inline comment
+// renderComment renders a (?#...) inline comment. Comment text is
+// prose the user wrote in the regex — not regex syntax — so it reads
+// more naturally in the sans-serif label font, kept italic via the
+// comment CSS class.
 func (r *Renderer) renderComment(comment *parser.Comment) RenderedNode {
 	cfg := r.Config
 	text := "# " + comment.Text
-	textWidth := MeasureText(text, cfg)
+	textWidth := MeasureLabelText(text, cfg)
 	padding := cfg.Padding / 2
 
 	width := textWidth + 2*padding
@@ -553,10 +773,10 @@ func (r *Renderer) renderComment(comment *parser.Comment) RenderedNode {
 
 	textElem := &Text{
 		X:          width / 2,
-		Y:          height/2 + cfg.FontSize/3,
+		Y:          height/2 + cfg.LabelFontSize/3,
 		Content:    text,
-		FontFamily: cfg.FontFamily,
-		FontSize:   cfg.FontSize - 2, // Slightly smaller for comments
+		FontFamily: cfg.LabelFontFamily,
+		FontSize:   cfg.LabelFontSize,
 		Anchor:     "middle",
 		Class:      "comment-text",
 	}
@@ -594,7 +814,7 @@ func (r *Renderer) renderInlineModifier(im *parser.InlineModifier) RenderedNode 
 	}
 
 	// Global modifier - just render as a label
-	return r.renderLabel(label, "flags")
+	return r.renderStructuralLabel(label, "flags")
 }
 
 // renderBalancedGroup renders a .NET balanced group (?<name-other>...) or (?<-other>...)
@@ -683,7 +903,7 @@ func (r *Renderer) renderConditional(cond *parser.Conditional) RenderedNode {
 
 	// Render the yes (true) branch
 	yesContent := r.renderRegexp(cond.TrueMatch)
-	yesLabel := r.renderLabel("then", "condition-label")
+	yesLabel := r.renderStructuralLabel("then", "condition-label")
 
 	// Combine yes label and content
 	yesItems := []RenderedNode{yesLabel, yesContent}
@@ -701,7 +921,7 @@ func (r *Renderer) renderConditional(cond *parser.Conditional) RenderedNode {
 	if cond.FalseMatch != nil {
 		// Has a no (false) branch
 		noContent := r.renderRegexp(cond.FalseMatch)
-		noLabel := r.renderLabel("else", "condition-label")
+		noLabel := r.renderStructuralLabel("else", "condition-label")
 
 		// Combine no label and content
 		noItems := []RenderedNode{noLabel, noContent}
@@ -762,7 +982,7 @@ func (r *Renderer) renderRecursiveRef(ref *parser.RecursiveRef) RenderedNode {
 		}
 	}
 
-	return r.renderLabel(label, "recursive-ref")
+	return r.renderStructuralLabel(label, "recursive-ref")
 }
 
 // renderBranchReset renders a branch reset group (?|...)
@@ -833,7 +1053,7 @@ func (r *Renderer) renderBacktrackControl(bc *parser.BacktrackControl) RenderedN
 		}
 	}
 
-	return r.renderLabel(label, "backtrack-control")
+	return r.renderStructuralLabel(label, "backtrack-control")
 }
 
 // renderCallout renders a PCRE callout (?C), (?Cn), (?C"text")
@@ -844,7 +1064,7 @@ func (r *Renderer) renderCallout(n *parser.Callout) RenderedNode {
 	} else {
 		label = fmt.Sprintf("callout \"%s\"", n.Text)
 	}
-	return r.renderLabel(label, "callout")
+	return r.renderStructuralLabel(label, "callout")
 }
 
 // renderMatch renders a sequence of fragments
@@ -882,8 +1102,8 @@ func (r *Renderer) renderMatch(match *parser.Match) RenderedNode {
 
 		connectorPath := &Path{
 			D:           pb.String(),
-			Stroke:      r.Config.LineColor,
-			StrokeWidth: r.Config.LineWidth,
+			Stroke:      r.Config.Connector.Color,
+			StrokeWidth: r.Config.Connector.StrokeWidth,
 		}
 		children = append(children, connectorPath)
 	}
@@ -958,8 +1178,8 @@ func (r *Renderer) renderWithRepeat(content RenderedNode, repeat *parser.Repeat)
 
 		children = append(children, &Path{
 			D:           skipPath.String(),
-			Stroke:      cfg.LineColor,
-			StrokeWidth: cfg.LineWidth,
+			Stroke:      cfg.Connector.Color,
+			StrokeWidth: cfg.Connector.StrokeWidth,
 			Class:       "skip-path",
 		})
 	}
@@ -976,8 +1196,8 @@ func (r *Renderer) renderWithRepeat(content RenderedNode, repeat *parser.Repeat)
 
 		children = append(children, &Path{
 			D:           loopPath.String(),
-			Stroke:      cfg.LineColor,
-			StrokeWidth: cfg.LineWidth,
+			Stroke:      cfg.Connector.Color,
+			StrokeWidth: cfg.Connector.StrokeWidth,
 			Class:       "loop-path",
 		})
 
@@ -992,8 +1212,8 @@ func (r *Renderer) renderWithRepeat(content RenderedNode, repeat *parser.Repeat)
 				D: "M " + fmtFloat(arrowX+arrowSize) + " " + fmtFloat(arrowY-arrowSize) +
 					" L " + fmtFloat(arrowX) + " " + fmtFloat(arrowY) +
 					" L " + fmtFloat(arrowX+arrowSize) + " " + fmtFloat(arrowY+arrowSize),
-				Stroke:      cfg.LineColor,
-				StrokeWidth: cfg.LineWidth,
+				Stroke:      cfg.Connector.Color,
+				StrokeWidth: cfg.Connector.StrokeWidth,
 			})
 		} else {
 			// Arrow pointing right (non-greedy)
@@ -1001,20 +1221,22 @@ func (r *Renderer) renderWithRepeat(content RenderedNode, repeat *parser.Repeat)
 				D: "M " + fmtFloat(arrowX-arrowSize) + " " + fmtFloat(arrowY-arrowSize) +
 					" L " + fmtFloat(arrowX) + " " + fmtFloat(arrowY) +
 					" L " + fmtFloat(arrowX-arrowSize) + " " + fmtFloat(arrowY+arrowSize),
-				Stroke:      cfg.LineColor,
-				StrokeWidth: cfg.LineWidth,
+				Stroke:      cfg.Connector.Color,
+				StrokeWidth: cfg.Connector.StrokeWidth,
 			})
 		}
 
-		// Add repeat label
+		// Add repeat label. The label ("1+ times", "2 to 5 times") is
+		// a structural description and uses the sans-serif label font
+		// — the CSS class also recolors it to the connector gray.
 		label := r.getRepeatLabel(repeat)
 		if label != "" {
 			children = append(children, &Text{
 				X:          width / 2,
 				Y:          loopY + cfg.FontSize,
 				Content:    label,
-				FontFamily: cfg.FontFamily,
-				FontSize:   cfg.FontSize - 2,
+				FontFamily: cfg.LabelFontFamily,
+				FontSize:   cfg.LabelFontSize,
 				Anchor:     "middle",
 				Class:      "repeat-label",
 			})
@@ -1037,8 +1259,8 @@ func (r *Renderer) renderWithRepeat(content RenderedNode, repeat *parser.Repeat)
 			Y1:          anchorY,
 			X2:          contentOffsetX,
 			Y2:          anchorY,
-			Stroke:      cfg.LineColor,
-			StrokeWidth: cfg.LineWidth,
+			Stroke:      cfg.Connector.Color,
+			StrokeWidth: cfg.Connector.StrokeWidth,
 		})
 		// Right connector
 		children = append(children, &Line{
@@ -1046,8 +1268,8 @@ func (r *Renderer) renderWithRepeat(content RenderedNode, repeat *parser.Repeat)
 			Y1:          anchorY,
 			X2:          width,
 			Y2:          anchorY,
-			Stroke:      cfg.LineColor,
-			StrokeWidth: cfg.LineWidth,
+			Stroke:      cfg.Connector.Color,
+			StrokeWidth: cfg.Connector.StrokeWidth,
 		})
 	}
 
@@ -1164,8 +1386,8 @@ func (r *Renderer) renderRegexp(regexp *parser.Regexp) RenderedNode {
 
 		children = append(children, &Path{
 			D:           leftPath.String(),
-			Stroke:      cfg.LineColor,
-			StrokeWidth: cfg.LineWidth,
+			Stroke:      cfg.Connector.Color,
+			StrokeWidth: cfg.Connector.StrokeWidth,
 		})
 
 		// Right connector curve
@@ -1185,8 +1407,8 @@ func (r *Renderer) renderRegexp(regexp *parser.Regexp) RenderedNode {
 
 		children = append(children, &Path{
 			D:           rightPath.String(),
-			Stroke:      cfg.LineColor,
-			StrokeWidth: cfg.LineWidth,
+			Stroke:      cfg.Connector.Color,
+			StrokeWidth: cfg.Connector.StrokeWidth,
 		})
 	}
 
@@ -1279,7 +1501,7 @@ func (r *Renderer) renderCharsetSetExpression(charset *parser.Charset) RenderedN
 		}
 		return r.renderLabeledBox(label, texts, "charset")
 	default:
-		return r.renderLabel("<set-expression>", "charset")
+		return r.renderStructuralLabel("<set-expression>", "charset")
 	}
 }
 
@@ -1441,13 +1663,17 @@ func (r *Renderer) renderSubexp(subexp *parser.Subexp) RenderedNode {
 	return r.renderSubexpBox(label, content, fill)
 }
 
-// renderLabeledBox creates a labeled box with text items (for charset)
+// renderLabeledBox creates a labeled box with text items (for charset).
+// The header (e.g. "One of:") is a structural label and uses the
+// sans-serif label font, while each item ("a", "a" - "z") is regex
+// content and stays in the monospace content font.
 func (r *Renderer) renderLabeledBox(label string, items []string, class string) RenderedNode {
 	cfg := r.Config
 	padding := cfg.Padding
 
-	// Calculate dimensions
-	labelWidth := MeasureText(label, cfg)
+	// Calculate dimensions. Header measured as label text, items
+	// measured as content text.
+	labelWidth := MeasureLabelText(label, cfg)
 	maxItemWidth := 0.0
 	for _, item := range items {
 		w := MeasureText(item, cfg)
@@ -1480,17 +1706,17 @@ func (r *Renderer) renderLabeledBox(label string, items []string, class string) 
 		Ry:     cfg.CornerRadius,
 	})
 
-	// Label
+	// Header (structural label)
 	children = append(children, &Text{
 		X:          padding,
 		Y:          cfg.FontSize,
 		Content:    label,
-		FontFamily: cfg.FontFamily,
-		FontSize:   cfg.FontSize - 2,
+		FontFamily: cfg.LabelFontFamily,
+		FontSize:   cfg.LabelFontSize,
 		Class:      class + "-label",
 	})
 
-	// Items
+	// Items (regex content)
 	y := labelHeight + cfg.FontSize
 	for _, item := range items {
 		children = append(children, &Text{
@@ -1515,12 +1741,14 @@ func (r *Renderer) renderLabeledBox(label string, items []string, class string) 
 	}
 }
 
-// renderSubexpBox creates a subexpression box with depth-based fill color
+// renderSubexpBox creates a subexpression box with depth-based fill color.
+// The subexp label ("group #1", "lookahead", etc.) is a structural
+// label and uses the sans-serif label font.
 func (r *Renderer) renderSubexpBox(label string, content RenderedNode, fill string) RenderedNode {
 	cfg := r.Config
 	padding := cfg.Padding
 
-	labelWidth := MeasureText(label, cfg)
+	labelWidth := MeasureLabelText(label, cfg)
 	labelHeight := cfg.FontSize + padding
 
 	contentWidth := content.BBox.Width
@@ -1533,7 +1761,9 @@ func (r *Renderer) renderSubexpBox(label string, content RenderedNode, fill stri
 
 	var children []SVGElement
 
-	// Background rect with explicit fill and stroke
+	// Background rect with explicit fill and stroke. The subexp border
+	// uses NodeStrokeWidth so it visually matches other node borders,
+	// rather than pulling the connector stroke width.
 	children = append(children, &Rect{
 		X:           0,
 		Y:           0,
@@ -1543,16 +1773,16 @@ func (r *Renderer) renderSubexpBox(label string, content RenderedNode, fill stri
 		Ry:          cfg.CornerRadius,
 		Fill:        fill,
 		Stroke:      cfg.SubexpStroke,
-		StrokeWidth: cfg.LineWidth,
+		StrokeWidth: cfg.NodeStrokeWidth,
 	})
 
-	// Label
+	// Label (structural — group name / kind)
 	children = append(children, &Text{
 		X:          padding,
 		Y:          cfg.FontSize,
 		Content:    label,
-		FontFamily: cfg.FontFamily,
-		FontSize:   cfg.FontSize - 2,
+		FontFamily: cfg.LabelFontFamily,
+		FontSize:   cfg.LabelFontSize,
 		Class:      "subexp-label",
 	})
 
@@ -1588,12 +1818,15 @@ func (r *Renderer) renderSubexpBox(label string, content RenderedNode, fill stri
 	}
 }
 
-// renderLabeledBoxWithContent creates a labeled box containing rendered content
+// renderLabeledBoxWithContent creates a labeled box containing rendered
+// content. Used by scoped inline modifiers, conditionals, and similar
+// constructs where the header is a structural description and the
+// body is another rendered subdiagram.
 func (r *Renderer) renderLabeledBoxWithContent(label string, content RenderedNode, class string) RenderedNode {
 	cfg := r.Config
 	padding := cfg.Padding
 
-	labelWidth := MeasureText(label, cfg)
+	labelWidth := MeasureLabelText(label, cfg)
 	labelHeight := cfg.FontSize + padding
 
 	contentWidth := content.BBox.Width
@@ -1616,13 +1849,13 @@ func (r *Renderer) renderLabeledBoxWithContent(label string, content RenderedNod
 		Ry:     cfg.CornerRadius,
 	})
 
-	// Label
+	// Header (structural label)
 	children = append(children, &Text{
 		X:          padding,
 		Y:          cfg.FontSize,
 		Content:    label,
-		FontFamily: cfg.FontFamily,
-		FontSize:   cfg.FontSize - 2,
+		FontFamily: cfg.LabelFontFamily,
+		FontSize:   cfg.LabelFontSize,
 		Class:      class + "-label",
 	})
 

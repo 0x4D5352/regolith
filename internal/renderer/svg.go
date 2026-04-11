@@ -234,6 +234,11 @@ type Line struct {
 	Stroke      string
 	StrokeWidth float64
 	Class       string
+	// MarkerStart / MarkerEnd reference marker definitions in the
+	// surrounding <defs> block (e.g. "url(#start-arrow)"). Empty means
+	// no marker is drawn at that end of the line.
+	MarkerStart string
+	MarkerEnd   string
 }
 
 func (l *Line) Render() string {
@@ -248,6 +253,12 @@ func (l *Line) Render() string {
 	}
 	if l.StrokeWidth > 0 {
 		attrs = append(attrs, `stroke-width="`+fmtFloat(l.StrokeWidth)+`"`)
+	}
+	if l.MarkerStart != "" {
+		attrs = append(attrs, fmt.Sprintf(`marker-start="%s"`, l.MarkerStart))
+	}
+	if l.MarkerEnd != "" {
+		attrs = append(attrs, fmt.Sprintf(`marker-end="%s"`, l.MarkerEnd))
 	}
 	if l.Class != "" {
 		attrs = append(attrs, fmt.Sprintf(`class="%s"`, l.Class))
@@ -267,11 +278,15 @@ func (t *Title) Render() string {
 
 // SVG represents the root <svg> element
 type SVG struct {
-	Width    float64
-	Height   float64
-	ViewBox  string
-	Children []SVGElement
+	Width   float64
+	Height  float64
+	ViewBox string
+	// Defs is the content of an optional <defs> block rendered before
+	// the <style> block. Used for shared definitions like <marker>
+	// elements for connector terminators.
+	Defs     string
 	Style    string
+	Children []SVGElement
 }
 
 func (s *SVG) Render() string {
@@ -289,6 +304,9 @@ func (s *SVG) Render() string {
 	}
 
 	var children strings.Builder
+	if s.Defs != "" {
+		fmt.Fprintf(&children, "<defs>%s</defs>", s.Defs)
+	}
 	if s.Style != "" {
 		fmt.Fprintf(&children, "<style>%s</style>", s.Style)
 	}
