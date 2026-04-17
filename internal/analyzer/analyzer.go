@@ -15,6 +15,20 @@ type analysis struct {
 	definedNames map[string]bool // All named capture groups present in the pattern
 	usedNums     map[int]bool    // Group numbers referenced by backrefs / recursive refs
 	usedNames    map[string]bool // Group names referenced by backrefs / recursive refs
+
+	// pendingBackrefs records every BackReference site encountered during
+	// group-metadata collection. Validity can only be decided once the
+	// entire pattern has been scanned (forward references are legal), so
+	// the sites are replayed after collection completes.
+	pendingBackrefs []backrefSite
+}
+
+// backrefSite bundles a BackReference node with the fragment that carries
+// it, so flagInvalidBackRef can attach the finding to the correct node
+// after the metadata walk has finished.
+type backrefSite struct {
+	br   *ast.BackReference
+	frag *ast.MatchFragment
 }
 
 // Analyze performs static analysis on a parsed regex AST, walking all
@@ -30,9 +44,13 @@ func Analyze(root *ast.Regexp, pattern, flavorName string, features flavor.Featu
 		usedNames:    map[string]bool{},
 	}
 
-	// Single pre-pass over the AST to collect group definitions and their
-	// references. This lets global rules fire without re-walking and lets
-	// walkFragment ask "is this group ever referenced?" in O(1).
+	// Single pre-pass over the AST to collect group definitions, their
+	// references, and every backreference site. This lets global rules
+	// fire without re-walking and lets walkFragment ask "is this group
+	// ever referenced?" in O(1). Previously we walked the entire tree a
+	// second time just to validate backreferences; now the sites are
+	// captured during collection and replayed below without a fresh
+	// traversal.
 	a.collectGroupMetadata(root)
 
 	// Global rules: fire once against the whole pattern. These check
@@ -40,7 +58,9 @@ func Analyze(root *ast.Regexp, pattern, flavorName string, features flavor.Featu
 	// backreference target) and would produce duplicate findings if run
 	// per scope.
 	checkMissingAnchor(root, &a.findings)
-	a.checkInvalidBackReferences(root)
+	for _, site := range a.pendingBackrefs {
+		a.flagInvalidBackRef(site.br, site.frag)
+	}
 
 	// Per-scope rules: recurse through the AST.
 	a.walkRegexp(root)
@@ -92,14 +112,23 @@ func (a *analysis) walkFragment(frag *ast.MatchFragment) {
 	if frag == nil {
 		return
 	}
-	checkNestedQuantifier(frag, &a.findings)
-	checkQuantifiedAssertion(frag, &a.findings)
-	checkRedundantBoundedQuantifier(frag, &a.findings)
+
+	// Five rules below only do work when the fragment has a quantifier.
+	// Gating them with a single nil check skips ~5 function calls per
+	// unquantified fragment (the common case in most patterns) without
+	// changing the order or set of findings produced.
+	if frag.Repeat != nil {
+		checkNestedQuantifier(frag, &a.findings)
+		checkQuantifiedAssertion(frag, &a.findings)
+		checkRedundantBoundedQuantifier(frag, &a.findings)
+	}
 	checkSingleCharClass(frag.Content, &a.findings)
 	checkRedundantGroup(frag, &a.findings)
 	a.checkUselessCapture(frag)
-	checkPossessiveOpportunity(frag, a.features, &a.findings)
-	checkAtomicOpportunity(frag, a.features, &a.findings)
+	if frag.Repeat != nil {
+		checkPossessiveOpportunity(frag, a.features, &a.findings)
+		checkAtomicOpportunity(frag, a.features, &a.findings)
+	}
 
 	// Recurse into all node types that can contain a nested regexp, so that
 	// rules are applied uniformly regardless of nesting depth or flavor.
@@ -149,6 +178,10 @@ func (a *analysis) collectGroupMetadata(r *ast.Regexp) {
 				} else if n.Number > 0 {
 					a.usedNums[n.Number] = true
 				}
+				// Forward references are legal, so we can't decide
+				// validity mid-walk. Record the site and let Analyze
+				// replay it after every group definition is known.
+				a.pendingBackrefs = append(a.pendingBackrefs, backrefSite{br: n, frag: frag})
 			case *ast.RecursiveRef:
 				// RecursiveRef.Target is either "R" (whole pattern), a numeric
 				// string, or a name. Treat numeric targets as group references

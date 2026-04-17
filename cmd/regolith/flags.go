@@ -208,3 +208,44 @@ func writeOutputFile(path string, data []byte, stdout io.Writer, co *termenv.Out
 	_, _ = fmt.Fprintln(stdout, co.String("Wrote "+path).Foreground(termenv.ANSIColor(2)).String())
 	return nil
 }
+
+// writeTextOrStdout emits text either to a file (when outPath is set) or
+// to stdout. Both subcommands share this dispatch for their text-format
+// branch — `regolith` writes ANSI/Markdown, `regolith analyze` writes
+// findings in either form — and previously open-coded the same
+// `if outPath != "" { writeOutputFile } else { Fprint }` block.
+func writeTextOrStdout(text, outPath string, stdout io.Writer, co *termenv.Output) error {
+	if outPath != "" {
+		return writeOutputFile(outPath, []byte(text), stdout, co)
+	}
+	_, _ = fmt.Fprint(stdout, text)
+	return nil
+}
+
+// renderAndWriteSVG is the shared tail of both subcommands' `case
+// "svg":` branches. It validates that --output is present, builds the
+// renderer config from the parsed flags, invokes the caller-supplied
+// render function (plain Render vs annotated RenderAnnotated), and
+// writes the result to disk. Keeping the dispatch here means the
+// subcommands don't drift on validation, config layering, or confirmation
+// output.
+func renderAndWriteSVG(
+	fs *flag.FlagSet,
+	common *commonFlags,
+	style *svgStyleFlags,
+	stdout, stderr io.Writer,
+	co *termenv.Output,
+	render func(*renderer.Renderer) string,
+) error {
+	if err := requireOutputForSVG(common.Format, common.Output); err != nil {
+		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+		return err
+	}
+	cfg, err := buildSVGConfig(fs, common, style)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+		return err
+	}
+	r := renderer.New(cfg)
+	return writeOutputFile(common.Output, []byte(render(r)), stdout, co)
+}

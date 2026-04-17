@@ -71,30 +71,38 @@ func checkNestedQuantifier(frag *ast.MatchFragment, findings *[]*Finding) {
 	}
 }
 
-// containsUnboundedQuantifier returns true if any MatchFragment in the
-// Regexp subtree carries an unbounded Repeat (Max == -1). Bounded
-// quantifiers like {n,m} are intentionally excluded — even when nested
-// inside another bounded quantifier they produce a finite repetition count
-// rather than an exponential backtracking surface.
-func containsUnboundedQuantifier(r *ast.Regexp) bool {
+// walkFragmentsAny returns true if pred returns true for any fragment
+// in the subtree rooted at r, descending through Subexp content. The
+// shared helper replaces three near-identical open-coded walkers that
+// previously duplicated this iteration and recursion pattern.
+func walkFragmentsAny(r *ast.Regexp, pred func(*ast.MatchFragment) bool) bool {
 	if r == nil {
 		return false
 	}
 	for _, m := range r.Matches {
 		for _, f := range m.Fragments {
-			if f.Repeat != nil && f.Repeat.Max == -1 {
+			if pred(f) {
 				return true
 			}
-			// Recurse into nested subexpressions so that deeply buried
-			// unbounded quantifiers still count.
 			if sub, ok := f.Content.(*ast.Subexp); ok {
-				if containsUnboundedQuantifier(sub.Regexp) {
+				if walkFragmentsAny(sub.Regexp, pred) {
 					return true
 				}
 			}
 		}
 	}
 	return false
+}
+
+// containsUnboundedQuantifier returns true if any MatchFragment in the
+// Regexp subtree carries an unbounded Repeat (Max == -1). Bounded
+// quantifiers like {n,m} are intentionally excluded — even when nested
+// inside another bounded quantifier they produce a finite repetition count
+// rather than an exponential backtracking surface.
+func containsUnboundedQuantifier(r *ast.Regexp) bool {
+	return walkFragmentsAny(r, func(f *ast.MatchFragment) bool {
+		return f.Repeat != nil && f.Repeat.Max == -1
+	})
 }
 
 // ================================================================================
@@ -288,26 +296,15 @@ func checkMissingAnchor(r *ast.Regexp, findings *[]*Finding) {
 // \B as Escape nodes with EscapeType "word_boundary" / "non_word_boundary"
 // rather than as Anchor nodes, so both shapes must be recognized.
 func hasAnchor(r *ast.Regexp) bool {
-	if r == nil {
-		return false
-	}
-	for _, m := range r.Matches {
-		for _, f := range m.Fragments {
-			switch c := f.Content.(type) {
-			case *ast.Anchor:
-				return true
-			case *ast.Escape:
-				if c.EscapeType == "word_boundary" || c.EscapeType == "non_word_boundary" {
-					return true
-				}
-			case *ast.Subexp:
-				if hasAnchor(c.Regexp) {
-					return true
-				}
-			}
+	return walkFragmentsAny(r, func(f *ast.MatchFragment) bool {
+		switch c := f.Content.(type) {
+		case *ast.Anchor:
+			return true
+		case *ast.Escape:
+			return c.EscapeType == "word_boundary" || c.EscapeType == "non_word_boundary"
 		}
-	}
-	return false
+		return false
+	})
 }
 
 // checkPossessiveOpportunity flags greedy quantifiers on content that
@@ -370,22 +367,10 @@ func checkAtomicOpportunity(frag *ast.MatchFragment, features flavor.FeatureSet,
 
 // containsBackReference returns true if the subtree has any BackReference node.
 func containsBackReference(r *ast.Regexp) bool {
-	if r == nil {
-		return false
-	}
-	for _, m := range r.Matches {
-		for _, f := range m.Fragments {
-			if _, ok := f.Content.(*ast.BackReference); ok {
-				return true
-			}
-			if sub, ok := f.Content.(*ast.Subexp); ok {
-				if containsBackReference(sub.Regexp) {
-					return true
-				}
-			}
-		}
-	}
-	return false
+	return walkFragmentsAny(r, func(f *ast.MatchFragment) bool {
+		_, ok := f.Content.(*ast.BackReference)
+		return ok
+	})
 }
 
 // checkOverlappingAlternatives uses a simple heuristic to detect
@@ -572,36 +557,6 @@ func (a *analysis) checkUselessCapture(frag *ast.MatchFragment) {
 // checkInvalidBackReferences walks the AST and flags every BackReference
 // whose target group number or name is not defined in the pattern. Runs
 // once from Analyze as a global rule.
-func (a *analysis) checkInvalidBackReferences(r *ast.Regexp) {
-	if r == nil {
-		return
-	}
-	for _, m := range r.Matches {
-		for _, frag := range m.Fragments {
-			if frag == nil {
-				continue
-			}
-			if br, ok := frag.Content.(*ast.BackReference); ok {
-				a.flagInvalidBackRef(br, frag)
-			}
-			// Recurse into node types that nest a Regexp.
-			switch n := frag.Content.(type) {
-			case *ast.Subexp:
-				a.checkInvalidBackReferences(n.Regexp)
-			case *ast.Conditional:
-				a.checkInvalidBackReferences(n.TrueMatch)
-				a.checkInvalidBackReferences(n.FalseMatch)
-			case *ast.BranchReset:
-				a.checkInvalidBackReferences(n.Regexp)
-			case *ast.BalancedGroup:
-				a.checkInvalidBackReferences(n.Regexp)
-			case *ast.InlineModifier:
-				a.checkInvalidBackReferences(n.Regexp)
-			}
-		}
-	}
-}
-
 // flagInvalidBackRef emits a finding when a BackReference's target group is
 // not present in the pattern's defined set.
 func (a *analysis) flagInvalidBackRef(br *ast.BackReference, frag *ast.MatchFragment) {

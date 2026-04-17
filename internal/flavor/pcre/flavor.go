@@ -6,6 +6,7 @@ package pcre
 import (
 	"github.com/0x4d5352/regolith/internal/ast"
 	"github.com/0x4d5352/regolith/internal/flavor"
+	"github.com/0x4d5352/regolith/internal/flavor/helpers"
 )
 
 func init() {
@@ -25,11 +26,11 @@ func (f *PCRE) Description() string {
 
 func (f *PCRE) Parse(pattern string) (*ast.Regexp, error) {
 	state := ast.NewParserState()
-	result, err := Parse("", []byte(pattern), GlobalStore("state", state))
-	if err != nil {
-		return nil, err
-	}
-	return result.(*ast.Regexp), nil
+	// Before this refactor PCRE panicked on an unexpected parse result
+	// type via an unchecked type assertion. FinalizeParse surfaces the
+	// same impossible-state condition as a typed error, matching the
+	// other seven flavors without any change for valid patterns.
+	return helpers.FinalizeParse(Parse("", []byte(pattern), GlobalStore("state", state)))
 }
 
 func (f *PCRE) SupportedFlags() []flavor.FlagInfo {

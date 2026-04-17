@@ -1,7 +1,6 @@
 package renderer
 
 import (
-	"fmt"
 	"html"
 	"strconv"
 	"strings"
@@ -20,6 +19,80 @@ func fmtFloat(v float64) string {
 	return s
 }
 
+// ================================================================================
+// Attribute builder
+// ================================================================================
+
+// svgAttrs incrementally builds a space-separated list of SVG attribute
+// key="value" pairs into a single strings.Builder. Every Render method
+// used to do the same dance manually with a []string + append + Sprintf
+// + strings.Join — concentrating that logic here avoids repeated
+// allocations and collapses ~30 lines of attribute shuffling per element
+// into ~10. Attribute emission order is preserved exactly, so the output
+// is byte-identical to the previous fmt.Sprintf-based version.
+type svgAttrs struct {
+	b   strings.Builder
+	any bool
+}
+
+func (a *svgAttrs) sep() {
+	if a.any {
+		a.b.WriteByte(' ')
+	}
+	a.any = true
+}
+
+// Num writes name="<fmtFloat(v)>". Use Num for required numeric attrs
+// (x, y, width, ...) that must always be emitted regardless of value.
+func (a *svgAttrs) Num(name string, v float64) {
+	a.sep()
+	a.b.WriteString(name)
+	a.b.WriteString(`="`)
+	a.b.WriteString(fmtFloat(v))
+	a.b.WriteByte('"')
+}
+
+// NumPositive writes name="<fmtFloat(v)>" only when v > 0. Mirrors the
+// `if v > 0 { attrs = append(attrs, ...) }` guard every Render method
+// previously open-coded for optional dimensions like rx/ry/stroke-width.
+func (a *svgAttrs) NumPositive(name string, v float64) {
+	if v > 0 {
+		a.Num(name, v)
+	}
+}
+
+// Str writes name="<v>" only when v is non-empty. The value is inserted
+// verbatim — callers are expected to pass already-safe data (CSS color
+// names, class names, url(#...) marker refs) exactly as the previous
+// fmt.Sprintf("fill=%q", ...) did.
+func (a *svgAttrs) Str(name, v string) {
+	if v != "" {
+		a.sep()
+		a.b.WriteString(name)
+		a.b.WriteString(`="`)
+		a.b.WriteString(v)
+		a.b.WriteByte('"')
+	}
+}
+
+// StrAlways is the unconditional counterpart to Str — used for required
+// fixed-value attributes like xmlns="http://www.w3.org/2000/svg" or
+// fill="none".
+func (a *svgAttrs) StrAlways(name, v string) {
+	a.sep()
+	a.b.WriteString(name)
+	a.b.WriteString(`="`)
+	a.b.WriteString(v)
+	a.b.WriteByte('"')
+}
+
+func (a *svgAttrs) String() string { return a.b.String() }
+func (a *svgAttrs) empty() bool    { return !a.any }
+
+// ================================================================================
+// Element types
+// ================================================================================
+
 // SVGElement is the interface for all SVG elements
 type SVGElement interface {
 	Render() string
@@ -33,25 +106,25 @@ type Group struct {
 }
 
 func (g *Group) Render() string {
-	var attrs []string
-	if g.Class != "" {
-		attrs = append(attrs, fmt.Sprintf(`class="%s"`, g.Class))
-	}
-	if g.Transform != "" {
-		attrs = append(attrs, fmt.Sprintf(`transform="%s"`, g.Transform))
-	}
+	var a svgAttrs
+	a.Str("class", g.Class)
+	a.Str("transform", g.Transform)
 
 	var children strings.Builder
 	for _, child := range g.Children {
 		children.WriteString(child.Render())
 	}
 
-	attrStr := ""
-	if len(attrs) > 0 {
-		attrStr = " " + strings.Join(attrs, " ")
+	var out strings.Builder
+	out.WriteString("<g")
+	if !a.empty() {
+		out.WriteByte(' ')
+		out.WriteString(a.String())
 	}
-
-	return fmt.Sprintf("<g%s>%s</g>", attrStr, children.String())
+	out.WriteByte('>')
+	out.WriteString(children.String())
+	out.WriteString("</g>")
+	return out.String()
 }
 
 // Rect represents an SVG <rect> element
@@ -67,35 +140,19 @@ type Rect struct {
 }
 
 func (r *Rect) Render() string {
-	var attrs []string
-	attrs = append(attrs, `x="`+fmtFloat(r.X)+`"`)
-	attrs = append(attrs, `y="`+fmtFloat(r.Y)+`"`)
-	attrs = append(attrs, `width="`+fmtFloat(r.Width)+`"`)
-	attrs = append(attrs, `height="`+fmtFloat(r.Height)+`"`)
-
-	if r.Rx > 0 {
-		attrs = append(attrs, `rx="`+fmtFloat(r.Rx)+`"`)
-	}
-	if r.Ry > 0 {
-		attrs = append(attrs, `ry="`+fmtFloat(r.Ry)+`"`)
-	}
-	if r.Fill != "" {
-		attrs = append(attrs, fmt.Sprintf(`fill="%s"`, r.Fill))
-	}
-	if r.Stroke != "" {
-		attrs = append(attrs, fmt.Sprintf(`stroke="%s"`, r.Stroke))
-	}
-	if r.StrokeWidth > 0 {
-		attrs = append(attrs, `stroke-width="`+fmtFloat(r.StrokeWidth)+`"`)
-	}
-	if r.StrokeDashArray != "" {
-		attrs = append(attrs, fmt.Sprintf(`stroke-dasharray="%s"`, r.StrokeDashArray))
-	}
-	if r.Class != "" {
-		attrs = append(attrs, fmt.Sprintf(`class="%s"`, r.Class))
-	}
-
-	return fmt.Sprintf("<rect %s/>", strings.Join(attrs, " "))
+	var a svgAttrs
+	a.Num("x", r.X)
+	a.Num("y", r.Y)
+	a.Num("width", r.Width)
+	a.Num("height", r.Height)
+	a.NumPositive("rx", r.Rx)
+	a.NumPositive("ry", r.Ry)
+	a.Str("fill", r.Fill)
+	a.Str("stroke", r.Stroke)
+	a.NumPositive("stroke-width", r.StrokeWidth)
+	a.Str("stroke-dasharray", r.StrokeDashArray)
+	a.Str("class", r.Class)
+	return "<rect " + a.String() + "/>"
 }
 
 // Circle represents an SVG <circle> element, used for severity badge icons
@@ -109,20 +166,14 @@ type Circle struct {
 }
 
 func (c *Circle) Render() string {
-	var attrs []string
-	attrs = append(attrs, `cx="`+fmtFloat(c.Cx)+`"`)
-	attrs = append(attrs, `cy="`+fmtFloat(c.Cy)+`"`)
-	attrs = append(attrs, `r="`+fmtFloat(c.R)+`"`)
-	if c.Fill != "" {
-		attrs = append(attrs, fmt.Sprintf(`fill="%s"`, c.Fill))
-	}
-	if c.Stroke != "" {
-		attrs = append(attrs, fmt.Sprintf(`stroke="%s"`, c.Stroke))
-	}
-	if c.Class != "" {
-		attrs = append(attrs, fmt.Sprintf(`class="%s"`, c.Class))
-	}
-	return fmt.Sprintf("<circle %s/>", strings.Join(attrs, " "))
+	var a svgAttrs
+	a.Num("cx", c.Cx)
+	a.Num("cy", c.Cy)
+	a.Num("r", c.R)
+	a.Str("fill", c.Fill)
+	a.Str("stroke", c.Stroke)
+	a.Str("class", c.Class)
+	return "<circle " + a.String() + "/>"
 }
 
 // Text represents an SVG <text> element
@@ -138,25 +189,14 @@ type Text struct {
 }
 
 func (t *Text) Render() string {
-	var attrs []string
-	attrs = append(attrs, `x="`+fmtFloat(t.X)+`"`)
-	attrs = append(attrs, `y="`+fmtFloat(t.Y)+`"`)
-
-	if t.FontFamily != "" {
-		attrs = append(attrs, fmt.Sprintf(`font-family="%s"`, t.FontFamily))
-	}
-	if t.FontSize > 0 {
-		attrs = append(attrs, `font-size="`+fmtFloat(t.FontSize)+`"`)
-	}
-	if t.Fill != "" {
-		attrs = append(attrs, fmt.Sprintf(`fill="%s"`, t.Fill))
-	}
-	if t.Anchor != "" {
-		attrs = append(attrs, fmt.Sprintf(`text-anchor="%s"`, t.Anchor))
-	}
-	if t.Class != "" {
-		attrs = append(attrs, fmt.Sprintf(`class="%s"`, t.Class))
-	}
+	var a svgAttrs
+	a.Num("x", t.X)
+	a.Num("y", t.Y)
+	a.Str("font-family", t.FontFamily)
+	a.NumPositive("font-size", t.FontSize)
+	a.Str("fill", t.Fill)
+	a.Str("text-anchor", t.Anchor)
+	a.Str("class", t.Class)
 
 	var content string
 	if len(t.Spans) > 0 {
@@ -169,7 +209,7 @@ func (t *Text) Render() string {
 		content = html.EscapeString(t.Content)
 	}
 
-	return fmt.Sprintf("<text %s>%s</text>", strings.Join(attrs, " "), content)
+	return "<text " + a.String() + ">" + content + "</text>"
 }
 
 // TSpan represents an SVG <tspan> element inside text
@@ -180,20 +220,20 @@ type TSpan struct {
 }
 
 func (ts *TSpan) Render() string {
-	var attrs []string
-	if ts.Class != "" {
-		attrs = append(attrs, fmt.Sprintf(`class="%s"`, ts.Class))
-	}
-	if ts.Fill != "" {
-		attrs = append(attrs, fmt.Sprintf(`fill="%s"`, ts.Fill))
-	}
+	var a svgAttrs
+	a.Str("class", ts.Class)
+	a.Str("fill", ts.Fill)
 
-	attrStr := ""
-	if len(attrs) > 0 {
-		attrStr = " " + strings.Join(attrs, " ")
+	var out strings.Builder
+	out.WriteString("<tspan")
+	if !a.empty() {
+		out.WriteByte(' ')
+		out.WriteString(a.String())
 	}
-
-	return fmt.Sprintf("<tspan%s>%s</tspan>", attrStr, html.EscapeString(ts.Content))
+	out.WriteByte('>')
+	out.WriteString(html.EscapeString(ts.Content))
+	out.WriteString("</tspan>")
+	return out.String()
 }
 
 // Path represents an SVG <path> element
@@ -206,25 +246,19 @@ type Path struct {
 }
 
 func (p *Path) Render() string {
-	var attrs []string
-	attrs = append(attrs, fmt.Sprintf(`d="%s"`, p.D))
-
+	var a svgAttrs
+	a.StrAlways("d", p.D)
+	// Path must always emit a fill attribute: the explicit value when
+	// set, otherwise "none" so the path is drawn as an outline only.
 	if p.Fill != "" {
-		attrs = append(attrs, fmt.Sprintf(`fill="%s"`, p.Fill))
+		a.StrAlways("fill", p.Fill)
 	} else {
-		attrs = append(attrs, `fill="none"`)
+		a.StrAlways("fill", "none")
 	}
-	if p.Stroke != "" {
-		attrs = append(attrs, fmt.Sprintf(`stroke="%s"`, p.Stroke))
-	}
-	if p.StrokeWidth > 0 {
-		attrs = append(attrs, `stroke-width="`+fmtFloat(p.StrokeWidth)+`"`)
-	}
-	if p.Class != "" {
-		attrs = append(attrs, fmt.Sprintf(`class="%s"`, p.Class))
-	}
-
-	return fmt.Sprintf("<path %s/>", strings.Join(attrs, " "))
+	a.Str("stroke", p.Stroke)
+	a.NumPositive("stroke-width", p.StrokeWidth)
+	a.Str("class", p.Class)
+	return "<path " + a.String() + "/>"
 }
 
 // Line represents an SVG <line> element
@@ -242,29 +276,17 @@ type Line struct {
 }
 
 func (l *Line) Render() string {
-	var attrs []string
-	attrs = append(attrs, `x1="`+fmtFloat(l.X1)+`"`)
-	attrs = append(attrs, `y1="`+fmtFloat(l.Y1)+`"`)
-	attrs = append(attrs, `x2="`+fmtFloat(l.X2)+`"`)
-	attrs = append(attrs, `y2="`+fmtFloat(l.Y2)+`"`)
-
-	if l.Stroke != "" {
-		attrs = append(attrs, fmt.Sprintf(`stroke="%s"`, l.Stroke))
-	}
-	if l.StrokeWidth > 0 {
-		attrs = append(attrs, `stroke-width="`+fmtFloat(l.StrokeWidth)+`"`)
-	}
-	if l.MarkerStart != "" {
-		attrs = append(attrs, fmt.Sprintf(`marker-start="%s"`, l.MarkerStart))
-	}
-	if l.MarkerEnd != "" {
-		attrs = append(attrs, fmt.Sprintf(`marker-end="%s"`, l.MarkerEnd))
-	}
-	if l.Class != "" {
-		attrs = append(attrs, fmt.Sprintf(`class="%s"`, l.Class))
-	}
-
-	return fmt.Sprintf("<line %s/>", strings.Join(attrs, " "))
+	var a svgAttrs
+	a.Num("x1", l.X1)
+	a.Num("y1", l.Y1)
+	a.Num("x2", l.X2)
+	a.Num("y2", l.Y2)
+	a.Str("stroke", l.Stroke)
+	a.NumPositive("stroke-width", l.StrokeWidth)
+	a.Str("marker-start", l.MarkerStart)
+	a.Str("marker-end", l.MarkerEnd)
+	a.Str("class", l.Class)
+	return "<line " + a.String() + "/>"
 }
 
 // Title represents an SVG <title> element (for tooltips)
@@ -273,7 +295,7 @@ type Title struct {
 }
 
 func (t *Title) Render() string {
-	return fmt.Sprintf("<title>%s</title>", html.EscapeString(t.Content))
+	return "<title>" + html.EscapeString(t.Content) + "</title>"
 }
 
 // SVG represents the root <svg> element
@@ -290,29 +312,26 @@ type SVG struct {
 }
 
 func (s *SVG) Render() string {
-	var attrs []string
-	attrs = append(attrs, `xmlns="http://www.w3.org/2000/svg"`)
-
-	if s.Width > 0 {
-		attrs = append(attrs, `width="`+fmtFloat(s.Width)+`"`)
-	}
-	if s.Height > 0 {
-		attrs = append(attrs, `height="`+fmtFloat(s.Height)+`"`)
-	}
-	if s.ViewBox != "" {
-		attrs = append(attrs, fmt.Sprintf(`viewBox="%s"`, s.ViewBox))
-	}
+	var a svgAttrs
+	a.StrAlways("xmlns", "http://www.w3.org/2000/svg")
+	a.NumPositive("width", s.Width)
+	a.NumPositive("height", s.Height)
+	a.Str("viewBox", s.ViewBox)
 
 	var children strings.Builder
 	if s.Defs != "" {
-		fmt.Fprintf(&children, "<defs>%s</defs>", s.Defs)
+		children.WriteString("<defs>")
+		children.WriteString(s.Defs)
+		children.WriteString("</defs>")
 	}
 	if s.Style != "" {
-		fmt.Fprintf(&children, "<style>%s</style>", s.Style)
+		children.WriteString("<style>")
+		children.WriteString(s.Style)
+		children.WriteString("</style>")
 	}
 	for _, child := range s.Children {
 		children.WriteString(child.Render())
 	}
 
-	return fmt.Sprintf("<svg %s>%s</svg>", strings.Join(attrs, " "), children.String())
+	return "<svg " + a.String() + ">" + children.String() + "</svg>"
 }

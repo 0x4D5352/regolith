@@ -1,29 +1,13 @@
 package javascript
 
 import (
-	"strconv"
-
 	"github.com/0x4d5352/regolith/internal/ast"
+	"github.com/0x4d5352/regolith/internal/flavor/helpers"
 )
 
-// parseInt parses an integer from PEG match result
-func parseInt(v any) int {
-	var s string
-	switch val := v.(type) {
-	case []byte:
-		s = string(val)
-	case []any:
-		for _, b := range val {
-			s += string(b.([]byte))
-		}
-	case string:
-		s = val
-	default:
-		return 0
-	}
-	n, _ := strconv.Atoi(s)
-	return n
-}
+// parseInt is referenced by name from the generated parser, so we keep
+// a package-local alias that delegates to the shared implementation.
+func parseInt(v any) int { return helpers.ParseInt(v) }
 
 // makeEscape creates an Escape node from an escape code character
 func makeEscape(code string) *ast.Escape {

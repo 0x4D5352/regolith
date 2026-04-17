@@ -98,9 +98,10 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 
 	switch common.Format {
 	case "text":
-		// Text mode: ANSI to stdout, Markdown to file. co for the
-		// ANSI path wraps stdout so piped output auto-strips colors;
-		// the markdown renderer ignores co and emits plain Markdown.
+		// Text mode: ANSI to stdout, Markdown to file. The termenv
+		// output wrapping differs by destination — stdoutCo for the
+		// terminal branch so it auto-strips colors when piped, `co`
+		// for the file branch (the markdown renderer ignores it).
 		toFile := common.Output != ""
 		var text string
 		if toFile {
@@ -108,10 +109,7 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 		} else {
 			text = output.RenderAnalysisText(report, false, stdoutCo)
 		}
-		if toFile {
-			return writeOutputFile(common.Output, []byte(text), stdout, co)
-		}
-		_, _ = fmt.Fprint(stdout, text)
+		return writeTextOrStdout(text, common.Output, stdout, co)
 
 	case "json":
 		jsonStr, err := output.RenderAnalysisJSON(report)
@@ -121,18 +119,8 @@ func runAnalyze(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 		_, _ = fmt.Fprintln(stdout, jsonStr)
 
 	case "svg":
-		if err := requireOutputForSVG(common.Format, common.Output); err != nil {
-			_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
-			return err
-		}
-		cfg, err := buildSVGConfig(fs, &common, &style)
-		if err != nil {
-			_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
-			return err
-		}
-		r := renderer.New(cfg)
-		svg := r.RenderAnnotated(parsedAST, report)
-		return writeOutputFile(common.Output, []byte(svg), stdout, co)
+		return renderAndWriteSVG(fs, &common, &style, stdout, stderr, co,
+			func(r *renderer.Renderer) string { return r.RenderAnnotated(parsedAST, report) })
 
 	default:
 		_, _ = fmt.Fprintf(stderr, "Error: unknown format %q\nAvailable: json, svg, text\n", common.Format)

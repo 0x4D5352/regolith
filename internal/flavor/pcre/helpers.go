@@ -1,10 +1,10 @@
 package pcre
 
 import (
-	"strconv"
 	"unicode"
 
 	"github.com/0x4d5352/regolith/internal/ast"
+	"github.com/0x4d5352/regolith/internal/flavor/helpers"
 )
 
 // makeEscape creates an Escape node for a given escape code
@@ -107,48 +107,10 @@ func makeAnchor(code string) *ast.Anchor {
 	return anchor
 }
 
-// parseInt parses an interface{} containing digits into an int
-func parseInt(v any) int {
-	switch val := v.(type) {
-	case []byte:
-		n, _ := strconv.Atoi(string(val))
-		return n
-	case []any:
-		str := ""
-		for _, b := range val {
-			if bs, ok := b.([]byte); ok {
-				str += string(bs)
-			}
-		}
-		n, _ := strconv.Atoi(str)
-		return n
-	case string:
-		n, _ := strconv.Atoi(val)
-		return n
-	default:
-		return 0
-	}
-}
-
-// getString converts an interface{} to string
-func getString(v any) string {
-	switch val := v.(type) {
-	case []byte:
-		return string(val)
-	case []any:
-		str := ""
-		for _, b := range val {
-			if bs, ok := b.([]byte); ok {
-				str += string(bs)
-			}
-		}
-		return str
-	case string:
-		return val
-	default:
-		return ""
-	}
-}
+// parseInt and getString are referenced by the generated parser;
+// delegate to the shared implementation.
+func parseInt(v any) int     { return helpers.ParseInt(v) }
+func getString(v any) string { return helpers.GetString(v) }
 
 // isDigits checks if a string contains only digits
 func isDigits(s string) bool {

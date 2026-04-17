@@ -3,6 +3,7 @@ package renderer
 import (
 	"math"
 	"strconv"
+	"strings"
 )
 
 // BoundingBox represents the dimensions and anchor points of a rendered element
@@ -270,12 +271,5 @@ func (pb *PathBuilder) String() string {
 }
 
 func joinPath(commands []string) string {
-	result := ""
-	for i, cmd := range commands {
-		if i > 0 {
-			result += " "
-		}
-		result += cmd
-	}
-	return result
+	return strings.Join(commands, " ")
 }

@@ -10,10 +10,9 @@
 package gnugrep_bre
 
 import (
-	"fmt"
-
 	"github.com/0x4d5352/regolith/internal/ast"
 	"github.com/0x4d5352/regolith/internal/flavor"
+	"github.com/0x4d5352/regolith/internal/flavor/helpers"
 )
 
 // GNUGrepBRE is the GNU grep BRE flavor implementation.
@@ -40,18 +39,7 @@ func (g *GNUGrepBRE) Description() string {
 // Parse parses a GNU BRE pattern and returns an AST.
 func (g *GNUGrepBRE) Parse(pattern string) (*ast.Regexp, error) {
 	state := ast.NewParserState()
-
-	result, err := Parse("", []byte(pattern), GlobalStore("state", state))
-	if err != nil {
-		return nil, fmt.Errorf("parse error: %w", err)
-	}
-
-	regexp, ok := result.(*ast.Regexp)
-	if !ok {
-		return nil, fmt.Errorf("unexpected parse result type: %T", result)
-	}
-
-	return regexp, nil
+	return helpers.FinalizeParse(Parse("", []byte(pattern), GlobalStore("state", state)))
 }
 
 // SupportedFlags returns information about valid flags for GNU grep BRE.

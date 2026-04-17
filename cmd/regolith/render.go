@@ -125,24 +125,11 @@ func runRender(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		// both commands predictable.
 		toFile := common.Output != ""
 		text := output.RenderText(parsedAST, pattern, f.Name(), toFile, stdoutCo)
-		if toFile {
-			return writeOutputFile(common.Output, []byte(text), stdout, co)
-		}
-		_, _ = fmt.Fprint(stdout, text)
+		return writeTextOrStdout(text, common.Output, stdout, co)
 
 	case "svg":
-		if err := requireOutputForSVG(common.Format, common.Output); err != nil {
-			_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
-			return err
-		}
-		cfg, err := buildSVGConfig(fs, &common, &style)
-		if err != nil {
-			_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
-			return err
-		}
-		r := renderer.New(cfg)
-		svg := r.Render(parsedAST)
-		return writeOutputFile(common.Output, []byte(svg), stdout, co)
+		return renderAndWriteSVG(fs, &common, &style, stdout, stderr, co,
+			func(r *renderer.Renderer) string { return r.Render(parsedAST) })
 
 	case "json":
 		out, err := output.RenderJSON(parsedAST, pattern, f.Name())

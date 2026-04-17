@@ -1,52 +1,12 @@
 package dotnet
 
 import (
-	"strconv"
-
 	"github.com/0x4d5352/regolith/internal/ast"
+	"github.com/0x4d5352/regolith/internal/flavor/helpers"
 )
 
-// getString converts PEG match result to string
-func getString(v any) string {
-	if v == nil {
-		return ""
-	}
-	switch val := v.(type) {
-	case []byte:
-		return string(val)
-	case []any:
-		var s string
-		for _, b := range val {
-			if byteSlice, ok := b.([]byte); ok {
-				s += string(byteSlice)
-			}
-		}
-		return s
-	case string:
-		return val
-	default:
-		return ""
-	}
-}
-
-// parseInt parses an integer from PEG match result
-func parseInt(v any) int {
-	var s string
-	switch val := v.(type) {
-	case []byte:
-		s = string(val)
-	case []any:
-		for _, b := range val {
-			s += string(b.([]byte))
-		}
-	case string:
-		s = val
-	default:
-		return 0
-	}
-	n, _ := strconv.Atoi(s)
-	return n
-}
+func getString(v any) string { return helpers.GetString(v) }
+func parseInt(v any) int     { return helpers.ParseInt(v) }
 
 // makeEscape creates an Escape node from an escape code character.
 // .NET escape sequences:

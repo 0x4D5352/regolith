@@ -1,11 +1,8 @@
 package analyzer
 
 import (
-	"context"
 	"fmt"
-	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -26,22 +23,5 @@ const end = process.hrtime.bigint();
 process.stdout.write(String(end - start));
 `, strconv.Quote(pattern), strconv.Quote(input))
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "node", "-e", script)
-	out, err := cmd.Output()
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return timeout, fmt.Errorf("node timeout after %v", timeout)
-		}
-		return 0, fmt.Errorf("node exec: %w", err)
-	}
-
-	ns, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("node output parse: %w", err)
-	}
-
-	return time.Duration(ns), nil
+	return runTimedScript("node", []string{"-e", script}, timeout)
 }

@@ -4,10 +4,9 @@
 package dotnet
 
 import (
-	"fmt"
-
 	"github.com/0x4d5352/regolith/internal/ast"
 	"github.com/0x4d5352/regolith/internal/flavor"
+	"github.com/0x4d5352/regolith/internal/flavor/helpers"
 )
 
 // DotNet is the .NET regex flavor implementation.
@@ -29,18 +28,7 @@ func (d *DotNet) Description() string {
 // Parse parses a .NET regex pattern and returns an AST.
 func (d *DotNet) Parse(pattern string) (*ast.Regexp, error) {
 	state := ast.NewParserState()
-
-	result, err := Parse("", []byte(pattern), GlobalStore("state", state))
-	if err != nil {
-		return nil, fmt.Errorf("parse error: %w", err)
-	}
-
-	regexp, ok := result.(*ast.Regexp)
-	if !ok {
-		return nil, fmt.Errorf("unexpected parse result type: %T", result)
-	}
-
-	return regexp, nil
+	return helpers.FinalizeParse(Parse("", []byte(pattern), GlobalStore("state", state)))
 }
 
 // SupportedFlags returns information about valid inline modifiers for .NET.

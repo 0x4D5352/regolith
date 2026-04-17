@@ -1,11 +1,8 @@
 package analyzer
 
 import (
-	"context"
 	"fmt"
-	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -37,22 +34,5 @@ end = time.perf_counter_ns()
 sys.stdout.write(str(end - start))
 `, module, strconv.Quote(pattern), strconv.Quote(input))
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "python3", "-c", script)
-	out, err := cmd.Output()
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return timeout, fmt.Errorf("python3 timeout after %v", timeout)
-		}
-		return 0, fmt.Errorf("python3 exec: %w", err)
-	}
-
-	ns, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("python3 output parse: %w", err)
-	}
-
-	return time.Duration(ns), nil
+	return runTimedScript("python3", []string{"-c", script}, timeout)
 }
