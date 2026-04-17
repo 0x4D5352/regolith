@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+For human-facing contributor setup and workflow details, see
+[`CONTRIBUTING.md`](CONTRIBUTING.md). This file focuses on context
+that isn't obvious from reading the code.
+
 ## Project Overview
 
 regolith is a Go CLI tool that visualizes regular expressions as SVG railroad diagrams, JSON AST dumps, and Markdown outlines. It supports 8 regex flavors: JavaScript, Java, .NET, PCRE, POSIX BRE, POSIX ERE, GNU grep BRE, and GNU grep ERE. Each flavor has its own PEG grammar parsed via [pigeon](https://github.com/mna/pigeon), sharing a common AST and renderer.
@@ -28,11 +32,23 @@ GOLDEN_UPDATE=1 go test ./internal/renderer/...
 # Update output golden files (when intentionally changing JSON/Markdown output)
 GOLDEN_UPDATE=1 go test ./internal/output/...
 
+# Update analyzer + renderer goldens together
+make golden-analysis
+
 # Other
 make coverage             # Test with coverage report
 make lint                 # Requires golangci-lint
 make fmt                  # Format code
 make install              # Install to GOPATH/bin
+```
+
+Run the analyzer subcommand:
+
+```bash
+regolith analyze 'a.*b.*c'                          # text report (default)
+regolith analyze --format json 'a.*b.*c'            # JSON output
+regolith analyze --format svg -o out.svg 'a.*b.*c'  # annotated SVG
+regolith analyze --benchmark 'a.*b.*c'              # run runtime engines
 ```
 
 ## Architecture
@@ -62,16 +78,40 @@ Parse-then-render pipeline: PEG grammar -> AST -> SVG / JSON / Markdown
 4. **Output formats** (`internal/output/`):
    - `json.go` - AST-to-JSON translation with stable consumer-friendly schema (discriminated union via `type` field)
    - `markdown.go` - AST-to-Markdown nested bullet list for human-readable output
+   - `text.go` - Plain-text AST summary (default format in v0.2.0+)
+   - `color.go` - Terminal color profile resolution (`--color auto|always|never`) via termenv
+   - `analysis_text.go` / `analysis_json.go` - Analyzer report formatters
    - Golden tests in `internal/output/testdata/golden/{json,markdown}/`
 
-5. **CLI** (`cmd/regolith/main.go`):
-   - Flag parsing with pflag; `--flavor` for flavor selection, `--format` for output format (svg/json/markdown, default svg)
-   - JSON/Markdown write to stdout; SVG writes to file via `--output`
-   - Blank-imports all flavor packages for side-effect registration
+5. **CLI** (`cmd/regolith/`):
+   - `main.go` - Top-level dispatcher; routes `regolith analyze ...` to `runAnalyze` and everything else to `runRender` **before** pflag parsing, because the two subcommands own separate FlagSets with different defaults
+   - `flags.go` - Shared `commonFlags` (`--flavor`, `--format`, `--output`, `--color`, `--theme`, `--padding`, `--font-size`, `--line-width`) and `svgStyleFlags` (color overrides)
+   - `render.go` - Default subcommand: parse + emit text/json/svg. `--format` defaults to `text`; `--output ""` means stdout
+   - `analyze.go` - Analyzer subcommand with its own flags (`--benchmark`, `--timeout`, `--corpus`, `--sizes`, `--severity`)
+   - Blank-imports all flavor packages in `main.go` for side-effect registration
 
 6. **Legacy shim** (`internal/parser/`):
    - `ParseRegex()` delegates to JavaScript flavor for backward compatibility
    - Type aliases (`parser.Regexp = ast.Regexp` etc.) — `*ast.Regexp` and `*parser.Regexp` are interchangeable
+
+7. **Analyzer** (`internal/analyzer/`):
+   - `analyzer.go` - `Analyze(root, pattern, flavorName, features)` entry point; single group-metadata pre-pass, then global rules, then recursive per-scope walk
+   - `rules.go` + `rules_test.go` - Static-analysis rules (missing anchors, adjacent unbounded quantifiers, overlapping alternatives, invalid backrefs, etc.)
+   - `engine.go` + `engine_{grep,node,python,regexp2}.go` - External regex engine adapters used by `--benchmark` to measure real-world runtime behaviour
+   - `corpus.go` - Deterministic corpus generation (prose, json, yaml, repeated, random)
+   - `benchmark.go` - Benchmark orchestration across engines × corpus × sizes
+   - `report.go` - `AnalysisReport` / `Finding` result types
+
+8. **Theme system** (`internal/renderer/theme/`):
+   - `theme.go` - `Theme` interface + registry (`Register`, `Get`, `List`); themes register themselves via `init()`
+   - Palette files (`catppuccin.go`, `gruvbox.go`, `pastels.go`, `colorblind.go`, `high_contrast.go`) register one or more named themes each
+   - `Apply(cfg)` rewrites **only** the color-bearing fields of `renderer.Config` — never dimensions, typography, stroke widths, or severity colors — so style flags can layer on top of a theme
+
+9. **Annotated rendering** (`internal/renderer/annotate.go`):
+   - Overlays severity-coloured highlights on the rendered SVG for analyzer findings; used by `regolith analyze --format svg`
+
+10. **Unescape** (`internal/unescape/`):
+    - Applies string-literal unescaping (`\\` -> `\`, etc.) before parsing; wired to `--unescape`/`-u`
 
 ## Key Patterns
 
@@ -99,3 +139,6 @@ Parse-then-render pipeline: PEG grammar -> AST -> SVG / JSON / Markdown
 - **GNUGrepBRE** has unexported `name` field - use `flavor.Get("gnugrep-bre")` instead of direct struct instantiation.
 - **`-f` shorthand is taken** by `--flavor` — new flags needing `-f` must use long form only.
 - **`internal/parser/` is type aliases** — `parser.Regexp` and `ast.Regexp` are the same type. New code should import `internal/ast` directly.
+- **Subcommand dispatch runs before pflag** in `cmd/regolith/main.go`. `regolith analyze` owns a separate FlagSet with different defaults, so the inspection of `args[1] == "analyze"` must happen before any flag parsing.
+- **Themes never touch shape/dimension fields**. Only color-bearing fields of `renderer.Config` are rewritten by `Theme.Apply`. Dimensions, typography, stroke widths, and severity colors stay stable across themes so readers can transfer visual cues.
+- **Analyzer global vs. per-scope rules**. Rules that check pattern-wide properties (missing anchor, invalid backref target) are invoked once from `Analyze`; rules that need per-branch visibility are invoked inside `walkRegexp`/`walkMatch`/`walkFragment`. Putting a global rule in the per-scope walker produces duplicate findings.
